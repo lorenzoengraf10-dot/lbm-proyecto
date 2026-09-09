@@ -5,3 +5,15 @@ body {
   color: var(--color-stone-900);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+
+/* Los carteles de QR ya traen su propio tamaño en milímetros: la página solo
+   aporta el margen de la impresora. */
+@page {
+  margin: 8mm;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+}

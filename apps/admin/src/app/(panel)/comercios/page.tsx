@@ -33,9 +33,14 @@ export default async function PaginaComercios({
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-stone-900">Comercios</h1>
-        <Link href="/comercios/importar" className={estilos.botonSecundario}>
-          Importar desde CSV
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/comercios/imprimir-qr" className={estilos.botonSecundario}>
+            QR para imprimir
+          </Link>
+          <Link href="/comercios/importar" className={estilos.botonSecundario}>
+            Importar desde CSV
+          </Link>
+        </div>
       </div>
 
       <Desplegable titulo="Agregar un comercio">

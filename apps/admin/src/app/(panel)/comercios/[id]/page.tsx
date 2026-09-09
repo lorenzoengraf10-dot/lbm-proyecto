@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
+import { cartelQr } from "@/lib/qr";
 import { actualizarComercio, cambiarEstadoComercio } from "../actions";
 import { FormularioComercio } from "../formulario";
 
@@ -40,6 +41,24 @@ export default async function PaginaEditarComercio({
           valores={comercio}
           textoBoton="Guardar cambios"
         />
+      </div>
+
+      <div className={`${estilos.tarjeta} flex flex-wrap items-center gap-5 p-5`}>
+        <div
+          className="w-32 shrink-0"
+          // El SVG lo arma cartelQr, que escapa todo el texto que viene de la base.
+          dangerouslySetInnerHTML={{ __html: cartelQr(comercio) }}
+        />
+        <div className="min-w-48 flex-1">
+          <p className="text-sm font-medium text-stone-900">QR del local</p>
+          <p className="mb-3 text-sm text-stone-500">
+            Se imprime, se recorta y se pega en el comercio. El vendedor lo escanea al llegar y eso
+            registra la visita.
+          </p>
+          <a href={`/comercios/${comercio.id}/qr`} className={estilos.botonSecundario} download>
+            Descargar para imprimir
+          </a>
+        </div>
       </div>
 
       <div className={`${estilos.tarjeta} flex flex-wrap items-center justify-between gap-3 p-5`}>

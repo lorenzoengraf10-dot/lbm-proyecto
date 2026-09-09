@@ -6,7 +6,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "seed:usuarios": "tsx seed-usuarios.ts",
-    "import:comercios": "tsx import-comercios.ts"
+    "import:comercios": "tsx import-comercios.ts",
+    "acceso": "tsx quien-tiene-acceso.ts"
   },
   "dependencies": {
     "@lbm/shared": "workspace:*",

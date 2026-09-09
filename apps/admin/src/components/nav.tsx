@@ -7,14 +7,14 @@ import { cerrarSesion } from "@/lib/sesion";
 const SECCIONES = [
   { href: "/comercios", etiqueta: "Comercios" },
   { href: "/productos", etiqueta: "Productos" },
-  { href: "/vendedores", etiqueta: "Vendedores" },
+  { href: "/usuarios", etiqueta: "Usuarios" },
 ];
 
 export function Nav({ nombre }: { nombre: string }) {
   const rutaActual = usePathname();
 
   return (
-    <header className="border-b border-stone-200 bg-white">
+    <header className="border-b border-stone-200 bg-white print:hidden">
       <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3">
         <span className="font-semibold text-stone-900">La Buena Medida</span>
 

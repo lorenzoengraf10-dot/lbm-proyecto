@@ -7,8 +7,23 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 ## Estado
 
 - **Etapa 1 — Modelo de datos y backend**: completa. Esquema, RLS por rol, scripts de siembra e importación.
-- **Etapa 2 — Panel admin**: completa. Login, comercios (CRUD + importación CSV), productos (CRUD) y alta de vendedores.
-- Todavía no hay app del vendedor (etapa 4), generación de QR (etapa 3) ni reportes (etapa 6).
+- **Etapa 2 — Panel admin**: completa. Login, comercios (CRUD + importación CSV), productos (CRUD) y alta de cuentas.
+- **Etapa 3 — QR**: completa. Cartel imprimible por comercio, individual y en hoja para toda la cartera.
+- Falta la app del vendedor (etapas 4 y 5) y los reportes (etapa 6).
+
+## Ecosistema cerrado
+
+Solo entran las cuentas que crea el administrador desde el panel. Están apagadas todas las vías de registro (email, anónimo, SMS, Google y demás proveedores, web3, OAuth server), y aun si alguien lograra crear una cuenta suelta no vería absolutamente nada: las policies exigen un perfil activo en el sistema.
+
+Esa configuración vive en `supabase/config.toml` y **no se aplica sola al proyecto de la nube**:
+
+```bash
+pnpm dlx supabase config push   # aplica la configuración cerrada
+pnpm dlx supabase config diff   # comprueba que el proyecto real coincide
+pnpm --filter @lbm/scripts run acceso   # lista quién puede entrar hoy
+```
+
+`acceso` avisa si aparece alguna cuenta que no debería existir.
 
 ## Requisitos
 
@@ -67,6 +82,17 @@ pnpm --filter @lbm/scripts run import:comercios -- ./mi-archivo.csv
 ```
 
 El CSV necesita las columnas `codigo,nombre,localidad`. Los códigos se guardan en mayúsculas y la importación es segura de repetir: actualiza por `codigo` en vez de duplicar (y no reactiva comercios dados de baja).
+
+`scripts/comercios-cp.csv` ya trae CP1 a CP100 con nombres provisorios (`Comercio CP1`, etc.) para poder arrancar: se importa una vez y después cada nombre se corrige desde el panel a medida que se confirman.
+
+## QR de los comercios
+
+Cada comercio tiene su cartel de 7×9 cm con el QR, el código y el nombre:
+
+- **Uno solo**: desde la ficha del comercio, "Descargar para imprimir" (SVG, se imprime nítido a cualquier tamaño).
+- **Todos**: **Comercios → QR para imprimir** arma una hoja con los carteles de todos los comercios activos y se manda a la impresora con el botón "Imprimir". Se recortan por la línea de puntos.
+
+El QR guarda `LBM:<código>` como texto plano. No es un link: si alguien lo escanea con la cámara del celular no lo lleva a ningún lado, solo la app del vendedor lo entiende.
 
 ## Estructura
 

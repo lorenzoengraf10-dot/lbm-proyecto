@@ -151,6 +151,14 @@ max_indexes = 5
 # Vector Buckets is available to Supabase Pro plan.
 # [storage.vector.buckets.documents-openai]
 
+# ECOSISTEMA CERRADO: solo entran las cuentas que crea el admin desde el panel.
+# Todas las vías de registro de abajo están apagadas a propósito (signup por
+# email, anónimo, SMS, proveedores externos, web3, OAuth server).
+#
+# Este archivo NO se aplica solo al proyecto de la nube: hay que correr
+#   pnpm dlx supabase config push
+# y se puede comprobar que el proyecto real coincide con
+#   pnpm dlx supabase config diff
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used

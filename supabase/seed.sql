@@ -4,12 +4,14 @@
 -- Los usuarios (admin + vendedores) se siembran aparte con scripts/seed-usuarios.ts,
 -- porque requieren el Admin API de Supabase Auth, no un simple insert SQL.
 
+-- Unos pocos para desarrollo. La cartera real se carga importando
+-- scripts/comercios-cp.csv (CP1 a CP100) desde el panel.
 insert into public.comercios (codigo, nombre, localidad) values
   ('CP1', 'Almacén Don José', 'Carmen de Patagones'),
   ('CP2', 'Autoservicio La Esquina', 'Carmen de Patagones'),
   ('CP3', 'Despensa Rivadavia', 'Carmen de Patagones'),
-  ('V1', 'Almacén Villalonga Centro', 'Villalonga'),
-  ('V13', 'Fiambrería El Sur', 'Villalonga');
+  ('CP4', 'Almacén Belgrano', 'Carmen de Patagones'),
+  ('CP5', 'Fiambrería El Sur', 'Carmen de Patagones');
 
 insert into public.productos (nombre, precio, unidad_medida) values
   ('Jamón cocido', 4500.00, 'kg'),

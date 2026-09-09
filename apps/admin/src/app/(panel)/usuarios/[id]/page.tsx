@@ -7,7 +7,7 @@ import { formatearComision } from "@/lib/formato";
 import { cambiarEstadoUsuario } from "../actions";
 import { FormularioReset } from "../formulario-reset";
 
-export default async function PaginaVendedor({ params }: { params: Promise<{ id: string }> }) {
+export default async function PaginaUsuario({ params }: { params: Promise<{ id: string }> }) {
   const { supabase, userId } = await requerirAdmin();
   const { id } = await params;
 
@@ -26,8 +26,8 @@ export default async function PaginaVendedor({ params }: { params: Promise<{ id:
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/vendedores" className="text-sm text-stone-500 underline hover:text-stone-900">
-          ← Vendedores
+        <Link href="/usuarios" className="text-sm text-stone-500 underline hover:text-stone-900">
+          ← Usuarios
         </Link>
         <h1 className="text-xl font-semibold text-stone-900">{usuario.nombre}</h1>
         <Etiqueta activo={usuario.activo} />

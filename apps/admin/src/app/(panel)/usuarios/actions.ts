@@ -22,7 +22,7 @@ function fallo(error: string): EstadoVendedor {
   return { error, ok: null, credencial: null };
 }
 
-export async function crearVendedor(
+export async function crearUsuario(
   _estadoPrevio: EstadoVendedor,
   formData: FormData
 ): Promise<EstadoVendedor> {
@@ -31,11 +31,18 @@ export async function crearVendedor(
 
   const nombre = String(formData.get("nombre") ?? "").trim();
   const username = normalizarUsername(String(formData.get("username") ?? ""));
+  const rol = String(formData.get("rol") ?? "");
 
-  if (!nombre) return fallo("El nombre del vendedor no puede estar vacío.");
+  if (!nombre) return fallo("El nombre no puede estar vacío.");
 
   const errorUsuario = validarUsername(username);
   if (errorUsuario) return fallo(errorUsuario);
+
+  // Nunca confiar en el valor que llega del formulario: sin este chequeo se
+  // podría pedir cualquier rol editando el HTML.
+  if (rol !== "admin" && rol !== "vendedor") {
+    return fallo("Elegí si la cuenta es de administrador o de vendedor.");
+  }
 
   const admin = crearClienteServiceRole();
 
@@ -62,7 +69,7 @@ export async function crearVendedor(
     id: data.user.id,
     nombre,
     username,
-    rol: "vendedor",
+    rol,
   });
 
   if (errorPerfil) {
@@ -72,7 +79,7 @@ export async function crearVendedor(
     return fallo(mensajeDeError(errorPerfil, `Ya hay un usuario "${username}".`));
   }
 
-  revalidatePath("/vendedores");
+  revalidatePath("/usuarios");
   return {
     error: null,
     ok: `Vendedor ${nombre} creado.`,
@@ -122,6 +129,6 @@ export async function cambiarEstadoUsuario(formData: FormData): Promise<void> {
 
   await supabase.from("usuarios").update({ activo }).eq("id", id);
 
-  revalidatePath("/vendedores");
-  revalidatePath(`/vendedores/${id}`);
+  revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${id}`);
 }

@@ -1,6 +1,6 @@
 # Plan de Desarrollo — La Buena Medida (LBM)
 
-> **Estado: etapas 1 y 2 completas.** El plan de abajo quedó confirmado; las secciones 2 y 2.1 documentan las decisiones que se tomaron sobre los puntos ambiguos. La sección 6 anota las correcciones que salieron de la revisión de las dos primeras etapas.
+> **Estado: etapas 1, 2 y 3 completas.** El plan de abajo quedó confirmado; las secciones 2 y 2.1 documentan las decisiones que se tomaron sobre los puntos ambiguos. La sección 6 anota las correcciones que salieron de la revisión de las dos primeras etapas.
 
 ## 1. Resumen del entendimiento
 
@@ -24,7 +24,7 @@ El documento original delega en mí varias decisiones de stack, y dejó algunos 
 | 4 | Baja de vendedores (no mencionado explícitamente, sí para comercios/productos) | Mismo patrón: campo `activo`, nunca se borra (mantiene histórico de ventas/comisiones). |
 | 5 | Comisión "hoy 3% fijo, pero puede variar por vendedor a futuro" | Se guarda el % de comisión en cada vendedor, con default = constante global configurable. Así el día de mañana se ajusta por persona sin migrar el modelo. |
 | 6 | Definición de "semana" para reportes/cobertura | Semana calendario lunes a domingo, huso horario `America/Argentina/Buenos_Aires`. |
-| 7 | Contenido del QR | Texto plano con el código interno del comercio (ej. `CP1`), no una URL pública — así el QR no sirve de nada fuera de la app. |
+| 7 | Contenido del QR | Texto plano con el código del comercio y un prefijo propio (`LBM:CP1`), no una URL pública — así el QR no sirve de nada fuera de la app, y el prefijo permite descartar de una cualquier otro código que le llegue a la cámara. |
 | 8 | Multi-dispositivo por vendedor | Permitido sin restricción; no hay pairing de dispositivo único por usuario. |
 
 Si alguno de estos no es lo que se espera, se ajusta antes de tocar el modelo de datos (etapa 1).
@@ -87,7 +87,7 @@ lbm-proyecto/
 
 1. ✅ **Modelo de datos + backend básico** — esquema SQL en Supabase (usuarios/roles, comercios, productos, visitas, pedidos, pedido_items, configuración de comisión), Row Level Security (admin ve todo; vendedor solo lee catálogo/cartera y escribe lo propio), seed de prueba (`supabase/seed.sql` + `scripts/seed-usuarios.ts`), script de importación CSV de comercios.
 2. ✅ **Panel admin — catálogo, comercios y vendedores** — login admin, CRUD de productos (alta/edición/baja/precio), CRUD de comercios (alta/edición/baja) + pantalla de importación CSV inicial, y alta de cuentas de vendedores (no estaba explícito en el documento original, pero lo requiere el mecanismo de login ya confirmado — alguien tiene que poder crear esas cuentas desde algún lado).
-3. **Generación e impresión de QR** — QR por comercio a partir de su código, descarga individual y en lote (ZIP) desde el panel.
+3. ✅ **Generación e impresión de QR** — QR por comercio a partir de su código, con vista previa y descarga individual (SVG) desde la ficha, y una hoja de todos los comercios activos lista para imprimir. En vez del ZIP que se había planteado, la salida en lote es esa hoja imprimible: para pegar 100 carteles conviene mandarlos a la impresora de una que bajar 100 archivos sueltos. Si igual hacen falta los archivos, agregar el ZIP es un rato.
 4. **App del vendedor — escaneo y pedido (con conexión)** — login vendedor, listado de comercios con buscador, escaneo de QR → crea Visita, catálogo interactivo → carga Pedido asociado, ver último pedido del comercio como referencia.
 5. **Modo offline** — persistencia local (SQLite) de visitas/pedidos, cola de sincronización con IDs idempotentes, reintento automático al recuperar señal, indicador de "pendiente de sincronizar".
 6. **Dashboard + Reporte PDF semanal** — dashboard admin (ventas del día/semana, ranking de productos, cobertura de visitas en tiempo real), generación de PDF semanal con selector de semana (ventas por vendedor/producto, cobertura, comisión 3%).

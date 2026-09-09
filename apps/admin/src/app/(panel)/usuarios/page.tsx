@@ -3,9 +3,9 @@ import { Desplegable } from "@/components/desplegable";
 import { EstadoVacio, Etiqueta, SoloLectores, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { formatearComision } from "@/lib/formato";
-import { FormularioNuevoVendedor } from "./formulario-nuevo";
+import { FormularioNuevoUsuario } from "./formulario-nuevo";
 
-export default async function PaginaVendedores() {
+export default async function PaginaUsuarios() {
   const { supabase } = await requerirAdmin();
 
   const { data: usuarios, error } = await supabase
@@ -16,10 +16,10 @@ export default async function PaginaVendedores() {
 
   return (
     <>
-      <h1 className="text-xl font-semibold text-stone-900">Vendedores</h1>
+      <h1 className="text-xl font-semibold text-stone-900">Usuarios</h1>
 
-      <Desplegable titulo="Dar de alta un vendedor">
-        <FormularioNuevoVendedor />
+      <Desplegable titulo="Dar de alta una cuenta">
+        <FormularioNuevoUsuario />
       </Desplegable>
 
       <div className={`${estilos.tarjeta} overflow-hidden`}>
@@ -60,7 +60,7 @@ export default async function PaginaVendedores() {
                     </td>
                     <td className={`${estilos.celda} text-right`}>
                       <Link
-                        href={`/vendedores/${usuario.id}`}
+                        href={`/usuarios/${usuario.id}`}
                         className="text-stone-600 underline hover:text-stone-900"
                       >
                         Administrar
