@@ -31,15 +31,20 @@ Si alguno de estos no es lo que se espera, se ajusta antes de tocar el modelo de
 
 ### 2.1 Detalle — PIN propio y privado por vendedor
 
-Sobre el punto 1: se reemplaza contraseña por **PIN de 4 dígitos** para los vendedores (más rápido de tipear a diario, en la calle, desde el celular). El admin mantiene usuario + contraseña normal, por acceder desde escritorio y manejar datos más sensibles (ventas totales, comisiones).
+Sobre el punto 1: el vendedor usa un **PIN de 4 dígitos** para el uso diario (más rápido de tipear a diario, en la calle, desde el celular). El admin mantiene usuario + contraseña normal, por acceder desde escritorio y manejar datos más sensibles (ventas totales, comisiones).
 
-- **Por qué sigue siendo "secreto" con solo 4 dígitos**: el PIN se guarda igual que una contraseña, hasheado en Supabase Auth — nadie puede leerlo, ni el admin ni quien programe la app. La diferencia frente a una contraseña larga es la cantidad de combinaciones posibles (10.000), por eso se agrega un bloqueo por intentos fallidos (ver abajo).
-- **Usuario en vez de email**: el login pide "Usuario" (ej. `juan`) + PIN, no email. Por debajo se mapea a un email técnico invisible para Supabase.
-- **Alta**: el admin crea la cuenta del vendedor y le asigna un PIN inicial (o lo genera el sistema). Se lo entrega en persona o por WhatsApp (equipo chico, de confianza).
-- **Uso diario, pensado para funcionar offline**: en el primer login del celular, la sesión de Supabase queda guardada de forma segura en el dispositivo. De ahí en más, la app no vuelve a pedir usuario — solo el PIN cada vez que se abre, y lo valida localmente (sin necesitar señal) contra lo guardado en ese primer login. Funciona como una pantalla de bloqueo rápida.
-- **Bloqueo por intentos fallidos**: después de 5 PIN incorrectos seguidos, la app exige volver a loguearse con usuario + PIN online. Esto evita que alguien con el celular en mano pruebe las 10.000 combinaciones sin límite.
-- **Multi-dispositivo**: si el vendedor usa otro celular, repite el login completo ahí (usuario + PIN); no depende del admin salvo la primera vez que se creó la cuenta.
-- **Si lo olvida**: el admin lo resetea desde el panel (nuevo PIN temporal); no hay "link de recuperación" por correo.
+> **Ajuste técnico (etapa 1)**: Supabase Auth exige contraseñas de al menos 6 caracteres — es un piso fijo de la plataforma, no se puede bajar. Un PIN de 4 dígitos no puede ser directamente esa contraseña. La solución es igual de simple para el vendedor y en realidad más segura: el PIN nunca viaja a ningún servidor, es solo la llave para desbloquear localmente una sesión que ya inició con la credencial real.
+
+- **Credencial real vs. PIN de desbloqueo**: cada vendedor tiene una credencial real (≥6 caracteres, generada al crear la cuenta) que autentica contra Supabase, pero la usa una sola vez, al configurar su celular. El PIN de 4 dígitos que elige después es una llave que se guarda solo en ESE dispositivo (hasheada, en almacenamiento seguro del celular) para desbloquear la sesión ya iniciada, sin volver a escribir la credencial real.
+- **Por qué sigue siendo "secreto"**: la credencial real la guarda Supabase Auth hasheada (nadie la puede leer, ni el admin ni quien programe la app); el PIN lo guarda el propio celular hasheado (nadie fuera de ese dispositivo lo puede leer). En ningún punto queda una contraseña en texto plano.
+- **Usuario en vez de email**: el login pide "Usuario" (ej. `juan`), no email. Por debajo se mapea a un email técnico invisible para Supabase.
+- **Alta**: el admin crea la cuenta del vendedor con una credencial real temporal (≥6 caracteres). Se la entrega en persona o por WhatsApp (equipo chico, de confianza).
+- **Primer login en el celular**: se usa la credencial real temporal UNA sola vez. Ahí mismo, la app pide elegir un PIN de 4 dígitos y guarda la sesión de forma segura en el dispositivo.
+- **Uso diario, pensado para funcionar offline**: de ahí en más, la app solo pide el PIN para desbloquear — lo valida localmente (sin necesitar señal) y reutiliza la sesión ya guardada. Funciona como una pantalla de bloqueo rápida.
+- **Bloqueo por intentos fallidos**: después de 5 PIN incorrectos seguidos, la app borra la sesión local y exige repetir el login completo con la credencial real. Esto evita que alguien con el celular en mano pruebe las 10.000 combinaciones sin límite.
+- **Multi-dispositivo**: cada celular nuevo repite el login completo con la credencial real una vez, y define su propio PIN local (puede ser igual o distinto en cada equipo).
+- **Si olvida el PIN**: como la credencial real no se expone al vendedor en el día a día, el admin la resetea desde el panel y se repite el "primer login" en el celular nuevo.
+- **Dónde se implementa cada parte**: la credencial real y las cuentas son etapa 1 (backend, ya resuelto en las migraciones). El PIN local, su hash y el bloqueo por intentos son etapa 4/5 (app del vendedor), porque viven enteramente en el celular.
 - **Configurable**: el largo del PIN (4 dígitos) queda como constante, igual que la tasa de comisión, por si más adelante se quiere pasar a 6 dígitos.
 
 ## 3. Stack propuesto
@@ -67,8 +72,11 @@ lbm-proyecto/
 │   └── shared/             # tipos TS, constantes (TASA_COMISION_DEFAULT), utils comunes
 ├── supabase/
 │   ├── migrations/         # esquema SQL versionado
-│   ├── seed.sql            # datos de prueba (admin + vendedores + productos demo)
+│   ├── seed.sql            # datos de prueba (comercios, productos, configuración)
 │   └── functions/          # Edge Functions: generación de PDF, export de QR en lote
+├── scripts/
+│   ├── import-comercios.ts # importación masiva inicial de comercios (CSV)
+│   └── seed-usuarios.ts    # alta de admin + vendedores de prueba (usa el Admin API, no SQL)
 ├── docs/
 │   └── PLAN.md             # este documento
 ├── package.json            # root, workspaces
@@ -77,8 +85,8 @@ lbm-proyecto/
 
 ## 5. Plan de etapas
 
-1. **Modelo de datos + backend básico** — esquema SQL en Supabase (usuarios/roles, comercios, productos, visitas, pedidos, pedido_items, configuración de comisión), Row Level Security (admin ve todo; vendedor solo lee catálogo/cartera y escribe lo propio), seed de prueba, script de importación CSV de comercios.
-2. **Panel admin — catálogo y comercios** — login admin, CRUD de productos (alta/edición/baja/precio), CRUD de comercios (alta/edición/baja) + pantalla de importación CSV inicial.
+1. **Modelo de datos + backend básico** — esquema SQL en Supabase (usuarios/roles, comercios, productos, visitas, pedidos, pedido_items, configuración de comisión), Row Level Security (admin ve todo; vendedor solo lee catálogo/cartera y escribe lo propio), seed de prueba (`supabase/seed.sql` + `scripts/seed-usuarios.ts`), script de importación CSV de comercios.
+2. **Panel admin — catálogo, comercios y vendedores** — login admin, CRUD de productos (alta/edición/baja/precio), CRUD de comercios (alta/edición/baja) + pantalla de importación CSV inicial, y alta de cuentas de vendedores (no estaba explícito en el documento original, pero lo requiere el mecanismo de login ya confirmado — alguien tiene que poder crear esas cuentas desde algún lado).
 3. **Generación e impresión de QR** — QR por comercio a partir de su código, descarga individual y en lote (ZIP) desde el panel.
 4. **App del vendedor — escaneo y pedido (con conexión)** — login vendedor, listado de comercios con buscador, escaneo de QR → crea Visita, catálogo interactivo → carga Pedido asociado, ver último pedido del comercio como referencia.
 5. **Modo offline** — persistencia local (SQLite) de visitas/pedidos, cola de sincronización con IDs idempotentes, reintento automático al recuperar señal, indicador de "pendiente de sincronizar".
