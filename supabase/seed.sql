@@ -4,11 +4,6 @@
 -- Los usuarios (admin + vendedores) se siembran aparte con scripts/seed-usuarios.ts,
 -- porque requieren el Admin API de Supabase Auth, no un simple insert SQL.
 
-insert into public.configuracion (clave, valor, descripcion) values
-  ('tasa_comision_default', '3', 'Porcentaje de comisión por defecto para vendedores nuevos'),
-  ('pin_length', '4', 'Cantidad de dígitos del PIN de desbloqueo del vendedor'),
-  ('max_intentos_pin', '5', 'Intentos fallidos de PIN antes de exigir login completo de nuevo');
-
 insert into public.comercios (codigo, nombre, localidad) values
   ('CP1', 'Almacén Don José', 'Carmen de Patagones'),
   ('CP2', 'Autoservicio La Esquina', 'Carmen de Patagones'),

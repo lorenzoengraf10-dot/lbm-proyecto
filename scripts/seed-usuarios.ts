@@ -8,10 +8,8 @@
 //
 // Uso: pnpm --filter @lbm/scripts run seed:usuarios
 
-import { crearClienteAdmin } from "./supabaseAdmin.js";
-import type { Rol } from "@lbm/shared";
-
-const DOMINIO_EMAIL_INTERNO = "lbm.local";
+import { emailInterno, type Rol } from "@lbm/shared";
+import { crearClienteAdmin } from "./supabaseAdmin";
 
 interface UsuarioSemilla {
   username: string;
@@ -21,8 +19,8 @@ interface UsuarioSemilla {
 }
 
 // Credenciales de desarrollo/prueba únicamente. Para cualquier ambiente que
-// no sea local, cambiar estas contraseñas (o generarlas al azar) antes de
-// entregarle la cuenta real a alguien.
+// no sea local, dar de alta las cuentas reales desde el panel admin, que
+// genera credenciales al azar.
 const USUARIOS_SEED: UsuarioSemilla[] = [
   { username: "admin", nombre: "Administrador", rol: "admin", passwordDev: "admin-dev-0001" },
   { username: "vendedor1", nombre: "Vendedor de Prueba 1", rol: "vendedor", passwordDev: "vendedor1-dev" },
@@ -34,10 +32,8 @@ async function main() {
   let huboErrores = false;
 
   for (const usuario of USUARIOS_SEED) {
-    const email = `${usuario.username}@${DOMINIO_EMAIL_INTERNO}`;
-
     const { data, error } = await supabase.auth.admin.createUser({
-      email,
+      email: emailInterno(usuario.username),
       password: usuario.passwordDev,
       email_confirm: true,
     });
@@ -56,9 +52,10 @@ async function main() {
     });
 
     if (perfilError) {
-      console.error(
-        `✗ ${usuario.username}: usuario de auth creado pero falló el perfil — ${perfilError.message}`
-      );
+      // Sin perfil el usuario de auth no sirve para nada y bloquearía el
+      // username: se borra para poder reintentar el alta limpia.
+      await supabase.auth.admin.deleteUser(data.user.id);
+      console.error(`✗ ${usuario.username}: falló el perfil, se revirtió el alta — ${perfilError.message}`);
       huboErrores = true;
       continue;
     }

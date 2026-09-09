@@ -1,6 +1,6 @@
 # Plan de Desarrollo — La Buena Medida (LBM)
 
-> **Estado: propuesta inicial, pendiente de confirmación.** No se generó código de la aplicación todavía — solo este documento — a la espera de que se confirmen o ajusten los puntos de la sección 2.
+> **Estado: etapas 1 y 2 completas.** El plan de abajo quedó confirmado; las secciones 2 y 2.1 documentan las decisiones que se tomaron sobre los puntos ambiguos. La sección 6 anota las correcciones que salieron de la revisión de las dos primeras etapas.
 
 ## 1. Resumen del entendimiento
 
@@ -85,11 +85,35 @@ lbm-proyecto/
 
 ## 5. Plan de etapas
 
-1. **Modelo de datos + backend básico** — esquema SQL en Supabase (usuarios/roles, comercios, productos, visitas, pedidos, pedido_items, configuración de comisión), Row Level Security (admin ve todo; vendedor solo lee catálogo/cartera y escribe lo propio), seed de prueba (`supabase/seed.sql` + `scripts/seed-usuarios.ts`), script de importación CSV de comercios.
-2. **Panel admin — catálogo, comercios y vendedores** — login admin, CRUD de productos (alta/edición/baja/precio), CRUD de comercios (alta/edición/baja) + pantalla de importación CSV inicial, y alta de cuentas de vendedores (no estaba explícito en el documento original, pero lo requiere el mecanismo de login ya confirmado — alguien tiene que poder crear esas cuentas desde algún lado).
+1. ✅ **Modelo de datos + backend básico** — esquema SQL en Supabase (usuarios/roles, comercios, productos, visitas, pedidos, pedido_items, configuración de comisión), Row Level Security (admin ve todo; vendedor solo lee catálogo/cartera y escribe lo propio), seed de prueba (`supabase/seed.sql` + `scripts/seed-usuarios.ts`), script de importación CSV de comercios.
+2. ✅ **Panel admin — catálogo, comercios y vendedores** — login admin, CRUD de productos (alta/edición/baja/precio), CRUD de comercios (alta/edición/baja) + pantalla de importación CSV inicial, y alta de cuentas de vendedores (no estaba explícito en el documento original, pero lo requiere el mecanismo de login ya confirmado — alguien tiene que poder crear esas cuentas desde algún lado).
 3. **Generación e impresión de QR** — QR por comercio a partir de su código, descarga individual y en lote (ZIP) desde el panel.
 4. **App del vendedor — escaneo y pedido (con conexión)** — login vendedor, listado de comercios con buscador, escaneo de QR → crea Visita, catálogo interactivo → carga Pedido asociado, ver último pedido del comercio como referencia.
 5. **Modo offline** — persistencia local (SQLite) de visitas/pedidos, cola de sincronización con IDs idempotentes, reintento automático al recuperar señal, indicador de "pendiente de sincronizar".
 6. **Dashboard + Reporte PDF semanal** — dashboard admin (ventas del día/semana, ranking de productos, cobertura de visitas en tiempo real), generación de PDF semanal con selector de semana (ventas por vendedor/producto, cobertura, comisión 3%).
 
 Cada etapa es funcional de punta a punta antes de pasar a la siguiente.
+
+## 6. Correcciones de la revisión (etapas 1 y 2)
+
+Cosas que se arreglaron al revisar las dos primeras etapas juntas. Las migraciones se editaron en el lugar porque todavía no hay ningún proyecto Supabase con el esquema aplicado; una vez que lo haya, cualquier cambio de esquema tiene que ir en una migración nueva.
+
+**Seguridad (RLS)**
+
+- `rol_actual()` ahora ignora a los usuarios dados de baja (`... and activo`). Antes, un vendedor desactivado seguía pudiendo leer la cartera y cargar visitas y pedidos: la baja solo lo frenaba en el panel.
+- Ninguna policy se conforma con "estar logueado". Antes, `comercios` y `productos` se leían con solo `activo = true`, así que cualquier cuenta autenticada del proyecto veía toda la cartera de clientes. Ahora todas exigen un usuario activo del negocio.
+- Se apagó el registro público en `supabase/config.toml` (`enable_signup = false`), que viene prendido por defecto. Hay que apagarlo también en el dashboard del proyecto real.
+- La ventana de edición de pedidos ("mismo día") y la visibilidad cruzada entre vendedores se verificaron con casos concretos contra un Postgres local.
+
+**Modelo de datos**
+
+- `usuarios.comision_pct` y `pedido_items.subtotal` pasaron a `not null`: el trigger y la columna generada siempre los completan, y dejarlos nulos obligaba a manejar un caso que no puede pasar.
+- Las filas de `configuracion` se movieron de `seed.sql` a una migración: la app las necesita para funcionar (el alta de un vendedor falla sin `tasa_comision_default`), así que no son datos de ejemplo.
+- `productos.nombre` es único sin distinguir mayúsculas. En un catálogo de 15-20 ítems dos productos con el mismo nombre son un error de carga, y el vendedor no podría distinguirlos en la app.
+
+**Panel**
+
+- Cada server action valida que quien la llama sea admin. No alcanza con el guard del layout: las actions son endpoints HTTP propios y se pueden llamar directo.
+- El proxy copia las cookies renovadas cuando además redirige. Sin eso, si el token se renovaba justo en un request que redirigía, el refresh token rotado se perdía y la sesión se caía sola.
+- La validación del CSV se hace de nuevo en el servidor al confirmar la importación, en vez de confiar en lo que muestra la previsualización.
+- El formulario de alta queda abierto y limpio después de guardar, con el aviso a la vista, para poder cargar varios seguidos.

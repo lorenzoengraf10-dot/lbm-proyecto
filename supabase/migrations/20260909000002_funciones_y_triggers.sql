@@ -1,4 +1,7 @@
--- Devuelve el rol del usuario autenticado actual.
+-- Devuelve el rol del usuario autenticado actual, o null si no tiene perfil o
+-- está dado de baja. Que devuelva null para los inactivos es lo que hace que
+-- un vendedor dado de baja pierda el acceso en todas las policies de una.
+--
 -- security definer + search_path fijo: puede leer public.usuarios como dueño de
 -- la tabla (bypass de RLS) sin volver a evaluar la policy de usuarios, evitando
 -- recursión infinita cuando otras policies llaman a esta función.
@@ -9,7 +12,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select rol from public.usuarios where id = auth.uid();
+  select rol from public.usuarios where id = auth.uid() and activo;
 $$;
 
 -- Completa comision_pct desde configuracion.tasa_comision_default si no
@@ -25,6 +28,10 @@ begin
     select valor::numeric into new.comision_pct
     from public.configuracion
     where clave = 'tasa_comision_default';
+
+    if new.comision_pct is null then
+      raise exception 'Falta la fila tasa_comision_default en public.configuracion';
+    end if;
   end if;
   return new;
 end;

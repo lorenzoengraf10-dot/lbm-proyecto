@@ -6,43 +6,16 @@
 //   pnpm --filter @lbm/scripts run import:comercios -- comercios.csv
 //
 // Es seguro correrlo más de una vez: hace upsert por codigo (no duplica).
+// La misma validación la usa la pantalla de importación del panel admin.
 
 import { readFileSync } from "node:fs";
-import { parse } from "csv-parse/sync";
-import type { ComercioImportRow } from "@lbm/shared";
-import { crearClienteAdmin } from "./supabaseAdmin.js";
-
-interface FilaCsv {
-  codigo?: string;
-  nombre?: string;
-  localidad?: string;
-}
+import { parsearCsvComercios } from "@lbm/shared";
+import { crearClienteAdmin } from "./supabaseAdmin";
 
 function parsearArgs(argv: string[]) {
   const dryRun = argv.includes("--dry-run");
   const archivo = argv.find((a) => !a.startsWith("--"));
   return { dryRun, archivo };
-}
-
-function normalizarFilas(filasCrudas: FilaCsv[]): { validas: ComercioImportRow[]; errores: string[] } {
-  const validas: ComercioImportRow[] = [];
-  const errores: string[] = [];
-
-  filasCrudas.forEach((fila, indice) => {
-    const numeroFila = indice + 2; // +1 por el header, +1 porque el índice arranca en 0
-    const codigo = fila.codigo?.trim().toUpperCase();
-    const nombre = fila.nombre?.trim();
-    const localidad = fila.localidad?.trim();
-
-    if (!codigo || !nombre || !localidad) {
-      errores.push(`Fila ${numeroFila}: faltan datos (codigo/nombre/localidad) — ${JSON.stringify(fila)}`);
-      return;
-    }
-
-    validas.push({ codigo, nombre, localidad });
-  });
-
-  return { validas, errores };
 }
 
 async function main() {
@@ -54,14 +27,7 @@ async function main() {
     return;
   }
 
-  const contenido = readFileSync(archivo, "utf-8");
-  const filasCrudas: FilaCsv[] = parse(contenido, {
-    columns: (headers: string[]) => headers.map((h) => h.trim().toLowerCase()),
-    skip_empty_lines: true,
-    trim: true,
-  });
-
-  const { validas, errores } = normalizarFilas(filasCrudas);
+  const { validas, errores } = parsearCsvComercios(readFileSync(archivo, "utf-8"));
 
   if (errores.length > 0) {
     console.error(`${errores.length} fila(s) con problemas:`);

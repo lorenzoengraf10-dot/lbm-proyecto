@@ -12,7 +12,7 @@ create table public.usuarios (
   nombre text not null,
   username text not null,
   rol public.rol_usuario not null,
-  comision_pct numeric(5, 2),
+  comision_pct numeric(5, 2) not null,
   activo boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -46,14 +46,25 @@ create table public.productos (
   created_at timestamptz not null default now()
 );
 
+-- Único case-insensitive: el catálogo tiene 15-20 ítems y dos productos con el
+-- mismo nombre serían un error de carga, no algo buscado (y el vendedor no
+-- podría distinguirlos en la app).
+create unique index idx_productos_nombre_lower on public.productos (lower(nombre));
 create index idx_productos_activo on public.productos (activo);
 
 -- Configuración editable por el admin: tasa de comisión, largo de PIN, etc.
+-- Los valores se cargan acá y no en seed.sql porque la app los necesita para
+-- funcionar (seed.sql es solo datos de ejemplo para desarrollo).
 create table public.configuracion (
   clave text primary key,
   valor text not null,
   descripcion text
 );
+
+insert into public.configuracion (clave, valor, descripcion) values
+  ('tasa_comision_default', '3', 'Porcentaje de comisión por defecto para vendedores nuevos'),
+  ('pin_length', '4', 'Cantidad de dígitos del PIN de desbloqueo del vendedor'),
+  ('max_intentos_pin', '5', 'Intentos fallidos de PIN antes de exigir login completo de nuevo');
 
 -- Se registra SIEMPRE que un vendedor escanea el QR de un comercio,
 -- tenga pedido asociado o no.
@@ -90,7 +101,7 @@ create table public.pedido_items (
   producto_id uuid not null references public.productos (id),
   cantidad numeric(10, 2) not null check (cantidad > 0),
   precio_unitario numeric(10, 2) not null check (precio_unitario >= 0),
-  subtotal numeric(10, 2) generated always as (cantidad * precio_unitario) stored
+  subtotal numeric(10, 2) not null generated always as (cantidad * precio_unitario) stored
 );
 
 create index idx_pedido_items_pedido on public.pedido_items (pedido_id);

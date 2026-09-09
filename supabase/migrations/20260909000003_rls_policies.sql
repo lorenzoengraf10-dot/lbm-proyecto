@@ -2,6 +2,10 @@
 -- viene con privilegios por defecto sobre el schema public para anon/
 -- authenticated; acá solo se restringe a nivel de fila con RLS.
 --
+-- Todas las policies pasan por public.rol_actual(), que devuelve null si el
+-- usuario no tiene perfil o está dado de baja. Por eso ninguna condición
+-- alcanza con "estar logueado": hay que ser un usuario activo del negocio.
+--
 -- Nota de bootstrap: el primer usuario admin no puede darse de alta a
 -- través de estas policies (rol_actual() no puede resolver un admin que
 -- todavía no existe). Ese primer alta se hace por seed.sql o con la
@@ -18,7 +22,10 @@ alter table public.pedido_items enable row level security;
 -- usuarios: cada uno ve su propio perfil; el admin los ve y administra todos.
 create policy "usuarios_select" on public.usuarios
   for select
-  using (id = auth.uid() or public.rol_actual() = 'admin');
+  using (
+    public.rol_actual() = 'admin'
+    or (id = auth.uid() and activo)
+  );
 
 create policy "usuarios_insert_admin" on public.usuarios
   for insert
@@ -32,7 +39,10 @@ create policy "usuarios_update_admin" on public.usuarios
 -- comercios: el vendedor solo lee los activos; el admin ve y administra todos.
 create policy "comercios_select" on public.comercios
   for select
-  using (activo = true or public.rol_actual() = 'admin');
+  using (
+    public.rol_actual() = 'admin'
+    or (public.rol_actual() = 'vendedor' and activo)
+  );
 
 create policy "comercios_insert_admin" on public.comercios
   for insert
@@ -46,7 +56,10 @@ create policy "comercios_update_admin" on public.comercios
 -- productos: mismo patrón que comercios.
 create policy "productos_select" on public.productos
   for select
-  using (activo = true or public.rol_actual() = 'admin');
+  using (
+    public.rol_actual() = 'admin'
+    or (public.rol_actual() = 'vendedor' and activo)
+  );
 
 create policy "productos_insert_admin" on public.productos
   for insert
@@ -57,10 +70,10 @@ create policy "productos_update_admin" on public.productos
   using (public.rol_actual() = 'admin')
   with check (public.rol_actual() = 'admin');
 
--- configuracion: cualquier usuario logueado la puede leer; solo el admin la edita.
+-- configuracion: cualquier usuario activo la puede leer; solo el admin la edita.
 create policy "configuracion_select" on public.configuracion
   for select
-  using (auth.uid() is not null);
+  using (public.rol_actual() is not null);
 
 create policy "configuracion_insert_admin" on public.configuracion
   for insert
@@ -75,7 +88,10 @@ create policy "configuracion_update_admin" on public.configuracion
 -- las propias; el admin ve todas para calcular cobertura.
 create policy "visitas_select" on public.visitas
   for select
-  using (vendedor_id = auth.uid() or public.rol_actual() = 'admin');
+  using (
+    public.rol_actual() = 'admin'
+    or (public.rol_actual() = 'vendedor' and vendedor_id = auth.uid())
+  );
 
 create policy "visitas_insert_vendedor" on public.visitas
   for insert
@@ -87,7 +103,10 @@ create policy "visitas_insert_vendedor" on public.visitas
 -- para que no pueda "colgar" un pedido de una visita ajena.
 create policy "pedidos_select" on public.pedidos
   for select
-  using (vendedor_id = auth.uid() or public.rol_actual() = 'admin');
+  using (
+    public.rol_actual() = 'admin'
+    or (public.rol_actual() = 'vendedor' and vendedor_id = auth.uid())
+  );
 
 create policy "pedidos_insert_vendedor" on public.pedidos
   for insert
@@ -102,12 +121,24 @@ create policy "pedidos_insert_vendedor" on public.pedidos
 
 create policy "pedidos_update_vendedor_mismo_dia" on public.pedidos
   for update
-  using (vendedor_id = auth.uid() and public.es_hoy_ar(fecha))
-  with check (vendedor_id = auth.uid() and public.es_hoy_ar(fecha));
+  using (
+    public.rol_actual() = 'vendedor'
+    and vendedor_id = auth.uid()
+    and public.es_hoy_ar(fecha)
+  )
+  with check (
+    public.rol_actual() = 'vendedor'
+    and vendedor_id = auth.uid()
+    and public.es_hoy_ar(fecha)
+  );
 
 create policy "pedidos_delete_vendedor_mismo_dia" on public.pedidos
   for delete
-  using (vendedor_id = auth.uid() and public.es_hoy_ar(fecha));
+  using (
+    public.rol_actual() = 'vendedor'
+    and vendedor_id = auth.uid()
+    and public.es_hoy_ar(fecha)
+  );
 
 -- pedido_items: hereda la visibilidad y la ventana de edición del pedido padre.
 create policy "pedido_items_select" on public.pedido_items
@@ -116,25 +147,29 @@ create policy "pedido_items_select" on public.pedido_items
     exists (
       select 1 from public.pedidos p
       where p.id = pedido_items.pedido_id
-        and (p.vendedor_id = auth.uid() or public.rol_actual() = 'admin')
+        and (
+          public.rol_actual() = 'admin'
+          or (public.rol_actual() = 'vendedor' and p.vendedor_id = auth.uid())
+        )
     )
   );
 
 create policy "pedido_items_insert_vendedor" on public.pedido_items
   for insert
   with check (
-    exists (
+    public.rol_actual() = 'vendedor'
+    and exists (
       select 1 from public.pedidos p
       where p.id = pedido_items.pedido_id
         and p.vendedor_id = auth.uid()
-        and public.rol_actual() = 'vendedor'
     )
   );
 
 create policy "pedido_items_update_vendedor_mismo_dia" on public.pedido_items
   for update
   using (
-    exists (
+    public.rol_actual() = 'vendedor'
+    and exists (
       select 1 from public.pedidos p
       where p.id = pedido_items.pedido_id
         and p.vendedor_id = auth.uid()
@@ -142,7 +177,8 @@ create policy "pedido_items_update_vendedor_mismo_dia" on public.pedido_items
     )
   )
   with check (
-    exists (
+    public.rol_actual() = 'vendedor'
+    and exists (
       select 1 from public.pedidos p
       where p.id = pedido_items.pedido_id
         and p.vendedor_id = auth.uid()
@@ -153,7 +189,8 @@ create policy "pedido_items_update_vendedor_mismo_dia" on public.pedido_items
 create policy "pedido_items_delete_vendedor_mismo_dia" on public.pedido_items
   for delete
   using (
-    exists (
+    public.rol_actual() = 'vendedor'
+    and exists (
       select 1 from public.pedidos p
       where p.id = pedido_items.pedido_id
         and p.vendedor_id = auth.uid()
