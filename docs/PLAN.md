@@ -18,7 +18,7 @@ El documento original delega en mí varias decisiones de stack, y dejó algunos 
 
 | # | Punto ambiguo | Resolución propuesta |
 |---|---|---|
-| 1 | Mecanismo de login (no se especifica) | Email + contraseña vía Supabase Auth. El admin crea las cuentas de los vendedores (sin auto-registro público). |
+| 1 | Mecanismo de login (no se especifica) | Vendedor: usuario + **PIN numérico de 4 dígitos** (pensado para uso rápido a diario desde el celular). Admin: usuario + contraseña normal (panel de escritorio, datos más sensibles). Ambos vía Supabase Auth; el admin crea las cuentas (sin auto-registro público). |
 | 2 | ¿Se puede editar/anular un pedido ya cargado? | Sí, pero solo el mismo día de la carga. Pasado ese plazo queda fijo, para no romper la trazabilidad de comisiones ya calculadas/reportadas. |
 | 3 | ¿Cuentan varias visitas al mismo comercio en la misma semana? | Se registra cada escaneo como visita independiente (sin límite). Para "cobertura semanal" alcanza con ≥1 visita esa semana. |
 | 4 | Baja de vendedores (no mencionado explícitamente, sí para comercios/productos) | Mismo patrón: campo `activo`, nunca se borra (mantiene histórico de ventas/comisiones). |
@@ -29,16 +29,18 @@ El documento original delega en mí varias decisiones de stack, y dejó algunos 
 
 Si alguno de estos no es lo que se espera, se ajusta antes de tocar el modelo de datos (etapa 1).
 
-### 2.1 Detalle — contraseña propia y privada por usuario
+### 2.1 Detalle — PIN propio y privado por vendedor
 
-Sobre el punto 1: cada usuario (admin o vendedor) tiene su propia contraseña, que nadie más conoce ni puede ver — ni otro vendedor, ni el admin, ni quien programe la app.
+Sobre el punto 1: se reemplaza contraseña por **PIN de 4 dígitos** para los vendedores (más rápido de tipear a diario, en la calle, desde el celular). El admin mantiene usuario + contraseña normal, por acceder desde escritorio y manejar datos más sensibles (ventas totales, comisiones).
 
-- **Por qué es "secreta" de verdad**: Supabase Auth nunca guarda la contraseña en texto plano, la guarda hasheada (bcrypt). Ni mirando la base de datos se puede leer cuál es — solo se puede validar (¿coincide o no?) o resetear (asignar una nueva). Esto ya viene resuelto por la librería, no hay que construirlo.
-- **Usuario en vez de email**: como los vendedores pueden no tener (o no chequear) un email, el login se muestra como "Usuario + Contraseña" (ej. usuario `juan`), y puertas adentro se mapea a un email técnico (`juan@lbm.local`) que Supabase necesita pero que el vendedor nunca ve ni usa.
-- **Alta**: el admin crea la cuenta desde el panel (nombre del vendedor) y el sistema genera una contraseña temporal. El admin se la pasa en persona o por WhatsApp (equipo chico, de confianza).
-- **Primer login**: la app obliga a cambiarla por una contraseña elegida por el propio vendedor. Desde ese momento deja de ser conocida por el admin — es exclusiva de esa persona.
-- **Si la olvida**: como no dependemos de un email real, el reseteo lo hace el admin desde el panel (genera un nuevo temporal); no hay "link de recuperación" por correo.
-- **Uso diario**: la sesión queda iniciada en el celular (no pide contraseña cada vez que se abre la app), con un botón visible de "cerrar sesión" por si el dispositivo se comparte o se pierde.
+- **Por qué sigue siendo "secreto" con solo 4 dígitos**: el PIN se guarda igual que una contraseña, hasheado en Supabase Auth — nadie puede leerlo, ni el admin ni quien programe la app. La diferencia frente a una contraseña larga es la cantidad de combinaciones posibles (10.000), por eso se agrega un bloqueo por intentos fallidos (ver abajo).
+- **Usuario en vez de email**: el login pide "Usuario" (ej. `juan`) + PIN, no email. Por debajo se mapea a un email técnico invisible para Supabase.
+- **Alta**: el admin crea la cuenta del vendedor y le asigna un PIN inicial (o lo genera el sistema). Se lo entrega en persona o por WhatsApp (equipo chico, de confianza).
+- **Uso diario, pensado para funcionar offline**: en el primer login del celular, la sesión de Supabase queda guardada de forma segura en el dispositivo. De ahí en más, la app no vuelve a pedir usuario — solo el PIN cada vez que se abre, y lo valida localmente (sin necesitar señal) contra lo guardado en ese primer login. Funciona como una pantalla de bloqueo rápida.
+- **Bloqueo por intentos fallidos**: después de 5 PIN incorrectos seguidos, la app exige volver a loguearse con usuario + PIN online. Esto evita que alguien con el celular en mano pruebe las 10.000 combinaciones sin límite.
+- **Multi-dispositivo**: si el vendedor usa otro celular, repite el login completo ahí (usuario + PIN); no depende del admin salvo la primera vez que se creó la cuenta.
+- **Si lo olvida**: el admin lo resetea desde el panel (nuevo PIN temporal); no hay "link de recuperación" por correo.
+- **Configurable**: el largo del PIN (4 dígitos) queda como constante, igual que la tasa de comisión, por si más adelante se quiere pasar a 6 dígitos.
 
 ## 3. Stack propuesto
 
