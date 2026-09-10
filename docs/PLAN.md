@@ -118,3 +118,9 @@ Cosas que se arreglaron al revisar las dos primeras etapas juntas. Las migracion
 - El proxy copia las cookies renovadas cuando además redirige. Sin eso, si el token se renovaba justo en un request que redirigía, el refresh token rotado se perdía y la sesión se caía sola.
 - La validación del CSV se hace de nuevo en el servidor al confirmar la importación, en vez de confiar en lo que muestra la previsualización.
 - El formulario de alta queda abierto y limpio después de guardar, con el aviso a la vista, para poder cargar varios seguidos.
+
+## 7. Despliegue
+
+Panel admin en Vercel (proyecto `pedido.lbm`, conectado al repo por GitHub, deploys automáticos en cada push a `main`), Root Directory `apps/admin`. Variables de entorno cargadas en el dashboard de Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`.
+
+Los primeros deployments daban 404 (terminaban en "Ready" a los 2 segundos, sin build real): el proyecto se había creado antes de fijar el Root Directory, así que Vercel nunca detectó Next.js y el framework quedó pisado en "Other" a nivel del deployment de producción — aunque el Project Settings del dashboard ya decía "Next.js", el deployment activo seguía usando esa config vieja. Se agregó `apps/admin/vercel.json` con `"framework": "nextjs"` explícito para que no dependa de lo que haya guardado el dashboard.
