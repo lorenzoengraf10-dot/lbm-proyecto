@@ -104,6 +104,7 @@ Cosas que se arreglaron al revisar las dos primeras etapas juntas. Las migracion
 - Ninguna policy se conforma con "estar logueado". Antes, `comercios` y `productos` se leían con solo `activo = true`, así que cualquier cuenta autenticada del proyecto veía toda la cartera de clientes. Ahora todas exigen un usuario activo del negocio.
 - Se apagó el registro público en `supabase/config.toml` (`enable_signup = false`), que viene prendido por defecto. Hay que apagarlo también en el dashboard del proyecto real.
 - La ventana de edición de pedidos ("mismo día") y la visibilidad cruzada entre vendedores se verificaron con casos concretos contra un Postgres local.
+- `rol_actual`, `es_hoy_ar`, `set_comision_pct_default` y `recalcular_total_pedido` se movieron del schema `public` a uno nuevo, `privado` (migración `20260910000001`). PostgREST expone toda función de `public` como endpoint RPC público; el linter de seguridad de Supabase marcaba que `anon`/`authenticated` podían ejecutarlas directo vía `/rest/v1/rpc/...`. No están pensadas para llamarse desde afuera, solo las usan las RLS y los triggers — mover el schema no rompe nada (las policies referencian la función por OID, no por nombre) y saca el endpoint. Validado contra Postgres local antes de aplicarlo al proyecto real.
 
 **Modelo de datos**
 
