@@ -9,6 +9,7 @@ const PESTAÑAS = [
   { href: "/comercios", etiqueta: "Comercios" },
   { href: "/escanear", etiqueta: "Escanear" },
   { href: "/mis-pedidos", etiqueta: "Mis pedidos" },
+  { href: "/resumen", etiqueta: "Resumen" },
 ];
 
 export function EncabezadoSuperior({ nombre }: { nombre: string }) {

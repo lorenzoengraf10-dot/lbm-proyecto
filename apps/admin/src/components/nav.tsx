@@ -9,6 +9,7 @@ const SECCIONES = [
   { href: "/productos", etiqueta: "Productos" },
   { href: "/pedidos", etiqueta: "Pedidos" },
   { href: "/cobertura", etiqueta: "Cobertura" },
+  { href: "/estadisticas", etiqueta: "Estadísticas" },
   { href: "/comisiones", etiqueta: "Comisiones" },
   { href: "/reportes", etiqueta: "Reporte" },
   { href: "/usuarios", etiqueta: "Usuarios" },

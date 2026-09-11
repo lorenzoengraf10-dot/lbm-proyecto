@@ -14,6 +14,7 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Etapa 6 — Pedidos, comisiones y reportes**: completa. El panel tiene **Pedidos** (listado con filtros + detalle), **Comisiones** (total vendido y a pagar por vendedor, por rango), **Cobertura** (hace cuánto que nadie visita cada comercio) y el **Reporte semanal** con descarga en PDF.
 - El vendedor puede además **corregir o anular** un pedido el mismo día que lo cargó; pasada esa ventana queda fijo, para no mover comisiones ya reportadas.
 - El admin puede **ver el registro por mes y corregir cualquier pedido**, incluso viejo, desde su detalle — queda anotado quién, cuándo y por qué (`docs/PLAN.md` sección 13).
+- **Estadísticas** (admin): qué comercios compran más, qué productos se venden más y cómo viene cada vendedor, por período. El vendedor tiene su versión personal en **Resumen** (`docs/PLAN.md` sección 14).
 
 ## Ecosistema cerrado
 

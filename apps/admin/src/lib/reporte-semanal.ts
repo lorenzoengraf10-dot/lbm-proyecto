@@ -37,7 +37,8 @@ const POR_TANDA = 200;
 
 type ItemDelReporte = { producto_id: string; cantidad: number; subtotal: number };
 
-async function itemsDeLosPedidos(
+/** Exportado: /estadisticas hace el mismo tipo de consulta para un rango arbitrario. */
+export async function itemsDeLosPedidos(
   supabase: SesionAdmin["supabase"],
   idsPedidos: string[]
 ): Promise<ItemDelReporte[]> {

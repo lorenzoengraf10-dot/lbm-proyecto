@@ -11,6 +11,13 @@ export function formatearPrecio(valor: number | string): string {
   return formatoPrecio.format(Number(valor));
 }
 
+const formatoComision = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
+
+/** 3.00 -> "3%", 2.50 -> "2,5%" */
+export function formatearComision(valor: number | string): string {
+  return `${formatoComision.format(Number(valor))}%`;
+}
+
 const formatoCantidad = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
 
 // pedido_items.cantidad es numeric(10,2): vuelve de la base como "2.00" (string,
