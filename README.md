@@ -9,7 +9,8 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Etapa 1 — Modelo de datos y backend**: completa. Esquema, RLS por rol, scripts de siembra e importación.
 - **Etapa 2 — Panel admin**: completa. Login, comercios (CRUD + importación CSV), productos (CRUD) y alta de cuentas.
 - **Etapa 3 — QR**: completa. Cartel imprimible por comercio, individual y en hoja para toda la cartera.
-- Falta la app del vendedor (etapas 4 y 5) y los reportes (etapa 6).
+- **Etapa 4 — App del vendedor**: completa. Página web (no app nativa, ver `docs/PLAN.md` sección 9): login + PIN de desbloqueo, listado de comercios con buscador, escaneo de QR, carga de pedido y último pedido del comercio como referencia.
+- Falta el modo offline (etapa 5) y los reportes (etapa 6).
 
 ## Ecosistema cerrado
 
@@ -70,6 +71,15 @@ pnpm --filter @lbm/admin run dev
 
 Queda en http://localhost:3000. Entra con usuario y contraseña; solo los usuarios con rol `admin` tienen acceso.
 
+### 4. App del vendedor
+
+```bash
+cp apps/vendedor/.env.example apps/vendedor/.env.local   # mismos datos del proyecto que el panel
+pnpm --filter @lbm/vendedor run dev
+```
+
+Queda en http://localhost:3000 (o el puerto que esté libre). Entra con usuario y contraseña; solo los usuarios con rol `vendedor` tienen acceso. El primer ingreso en cada celular pide elegir un PIN de 4 dígitos para desbloquear rápido de ahí en más, sin repetir la contraseña real cada vez (ver `docs/PLAN.md` sección 9).
+
 ## Importar la cartera de comercios
 
 Desde el panel: **Comercios → Importar desde CSV**. Muestra una previsualización con las filas válidas y las que se saltean antes de confirmar.
@@ -98,6 +108,7 @@ El QR guarda `LBM:<código>` como texto plano. No es un link: si alguien lo esca
 
 ```
 apps/admin/       Panel de administración (Next.js)
+apps/vendedor/    App del vendedor: visitas y pedidos (Next.js)
 packages/shared/  Tipos del dominio, validaciones y parseo de CSV compartidos
 scripts/          Siembra de usuarios e importación masiva de comercios
 supabase/         Migraciones SQL, seed y configuración del proyecto
@@ -110,4 +121,6 @@ docs/PLAN.md      Plan de desarrollo y decisiones tomadas
 pnpm -r run typecheck
 pnpm --filter @lbm/admin run lint
 pnpm --filter @lbm/admin run build
+pnpm --filter @lbm/vendedor run lint
+pnpm --filter @lbm/vendedor run build
 ```

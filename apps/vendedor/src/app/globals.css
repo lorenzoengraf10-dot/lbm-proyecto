@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+body {
+  background: var(--color-stone-100);
+  color: var(--color-stone-900);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Evita el "doble tap para zoom" del navegador en los botones: la app se
+     usa a los apurones en la calle, un zoom accidental molesta. */
+  touch-action: manipulation;
+}

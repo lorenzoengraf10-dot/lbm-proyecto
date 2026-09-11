@@ -1,6 +1,6 @@
 # Plan de Desarrollo — La Buena Medida (LBM)
 
-> **Estado: etapas 1, 2 y 3 completas.** El plan de abajo quedó confirmado; las secciones 2 y 2.1 documentan las decisiones que se tomaron sobre los puntos ambiguos. La sección 6 anota las correcciones que salieron de la revisión de las dos primeras etapas.
+> **Estado: etapas 1, 2, 3 y 4 completas.** El plan de abajo quedó confirmado; las secciones 2 y 2.1 documentan las decisiones que se tomaron sobre los puntos ambiguos. La sección 6 anota las correcciones que salieron de la revisión de las dos primeras etapas. La sección 9 documenta un cambio de stack sobre lo acordado en la sección 3: la app del vendedor terminó siendo una página web, no una app nativa (React Native/Expo).
 
 ## 1. Resumen del entendimiento
 
@@ -88,7 +88,7 @@ lbm-proyecto/
 1. ✅ **Modelo de datos + backend básico** — esquema SQL en Supabase (usuarios/roles, comercios, productos, visitas, pedidos, pedido_items, configuración de comisión), Row Level Security (admin ve todo; vendedor solo lee catálogo/cartera y escribe lo propio), seed de prueba (`supabase/seed.sql` + `scripts/seed-usuarios.ts`), script de importación CSV de comercios.
 2. ✅ **Panel admin — catálogo, comercios y vendedores** — login admin, CRUD de productos (alta/edición/baja/precio), CRUD de comercios (alta/edición/baja) + pantalla de importación CSV inicial, y alta de cuentas de vendedores (no estaba explícito en el documento original, pero lo requiere el mecanismo de login ya confirmado — alguien tiene que poder crear esas cuentas desde algún lado).
 3. ✅ **Generación e impresión de QR** — QR por comercio a partir de su código, con vista previa y descarga individual (SVG) desde la ficha, y una hoja de todos los comercios activos lista para imprimir. En vez del ZIP que se había planteado, la salida en lote es esa hoja imprimible: para pegar 100 carteles conviene mandarlos a la impresora de una que bajar 100 archivos sueltos. Si igual hacen falta los archivos, agregar el ZIP es un rato.
-4. **App del vendedor — escaneo y pedido (con conexión)** — login vendedor, listado de comercios con buscador, escaneo de QR → crea Visita, catálogo interactivo → carga Pedido asociado, ver último pedido del comercio como referencia.
+4. ✅ **App del vendedor — escaneo y pedido (con conexión)** — login vendedor, listado de comercios con buscador, escaneo de QR → crea Visita, catálogo interactivo → carga Pedido asociado, ver último pedido del comercio como referencia. Terminó siendo una página web (ver sección 9), no la app nativa que planteaba la sección 3 originalmente.
 5. **Modo offline** — persistencia local (SQLite) de visitas/pedidos, cola de sincronización con IDs idempotentes, reintento automático al recuperar señal, indicador de "pendiente de sincronizar".
 6. **Dashboard + Reporte PDF semanal** — dashboard admin (ventas del día/semana, ranking de productos, cobertura de visitas en tiempo real), generación de PDF semanal con selector de semana (ventas por vendedor/producto, cobertura, comisión 3%).
 
@@ -131,3 +131,21 @@ Dos cosas que se agregaron después de tener el panel funcionando, a pedido del 
 
 - **Cambiar mi contraseña**: la pantalla de un usuario ya tenía "Generar credencial nueva" (para vendedores, o para resetear a otra persona), pero esa siempre arma una al azar — no dejaba elegir una propia. Para la propia cuenta (`esUnoMismo` en `/usuarios/[id]`) ahora se muestra en cambio un formulario para elegir la contraseña, vía `supabase.auth.updateUser()` con la sesión propia (no hace falta la service role: esa llamada solo puede tocar la cuenta de quien está logueado).
 - **Eliminar, no solo dar de baja**: `usuarios`, `comercios` y `productos` no tenían ninguna policy RLS `for delete` (un intento de borrado quedaba bloqueado en silencio, 0 filas). Se agregaron policies `*_delete_admin` (migración `20260910000002`). El borrado en sí solo tiene éxito si la fila nunca tuvo `visitas`/`pedidos`/`pedido_items` — esas tablas no tienen `on delete cascade` hacia acá a propósito, para no perder histórico de comisiones. La UI chequea eso antes de intentarlo y muestra un mensaje claro ("dalo de baja en su lugar") en vez de un error de base cruda. Para usuarios, el borrado pasa por `admin.auth.admin.deleteUser()` (service role) para que también desaparezca la cuenta de Supabase Auth, no solo el perfil.
+
+## 9. Etapa 4 — app del vendedor: web en vez de nativa
+
+La sección 3 proponía React Native + Expo para esta etapa, pensando en el modo offline (etapa 5) con SQLite embebido. Se cambió a una segunda app Next.js (`apps/vendedor`), por lo que costó poner online *solo el panel de admin* (sección 7): agregar encima toda una app nativa — cuentas de desarrollador, build con EAS, instalación en el celular — iba a multiplicar esa fricción, para una herramienta interna de dos personas. Con esto:
+
+- El repartidor abre una URL desde el navegador del celular (Chrome/Safari) y puede "agregar a pantalla de inicio" para que quede como un ícono. Nada que instalar ni aprobar en ninguna tienda.
+- Reutiliza el mismo stack ya probado (Next.js + Supabase + Vercel) en vez de sumar un toolchain nuevo (Expo/React Native) para dos personas.
+- El modo offline de la etapa 5 se resuelve más adelante con Service Worker + IndexedDB (mismo patrón de cola con IDs generados en el cliente que ya preveía la sección 3, solo que sobre APIs web en vez de SQLite nativo) — la etapa 4 en sí es "con conexión", así que no hacía falta resolver eso todavía.
+
+**PIN de desbloqueo (sección 2.1) adaptado al navegador**: el diseño original pensaba en `expo-secure-store` (Keychain/Keystore nativo). En un navegador no existe ese almacenamiento seguro de hardware, así que se adaptó así:
+- `localStorage` guarda `{hash, salt}` del PIN (SHA-256 vía Web Crypto, salt propio por dispositivo) — persiste entre sesiones, es lo que hace que el PIN "quede guardado en este celular".
+- `sessionStorage` guarda si esta pestaña/apertura ya se desbloqueó — se pierde al cerrar la app, por eso pide el PIN de nuevo cada vez que se vuelve a abrir, igual que una pantalla de bloqueo.
+- El PIN nunca se valida contra el servidor: es 100% local, funciona sin señal. La sesión real de Supabase (cookies) es aparte y es lo único que habilita de verdad el acceso a los datos — `requerirVendedor()` la exige siempre, tenga PIN configurado o no.
+- 5 intentos fallidos (o "¿Olvidaste el PIN?") borran el PIN local y cierran la sesión real: hay que repetir el login completo con la credencial que solo tiene el admin. Ver `apps/vendedor/src/lib/pin.ts` y `src/components/candado-pin.tsx`.
+
+**`crear_pedido`, una función de base en vez de dos inserts sueltos**: cargar un pedido son dos pasos (`pedidos` + `pedido_items`) que tienen que quedar los dos o ninguno — dos llamadas sueltas desde el cliente podían dejar un pedido sin ítems a mitad de camino. Se resolvió con una función Postgres (`supabase/migrations/20260910000003_funcion_crear_pedido.sql`) `security invoker` (no `definer`): corre con los permisos de quien la llama, así que sigue pasando por las mismas RLS de siempre — no es una puerta trasera, solo junta los dos inserts en una transacción. El precio de cada ítem se toma del catálogo en ese momento, nunca del cliente. A diferencia de `rol_actual()` y las otras funciones internas, esta sí se llama desde el cliente (`supabase.rpc('crear_pedido', ...)`), así que se deja pública a propósito.
+
+**Validado con un servidor Postgres+Auth de prueba** (el mismo enfoque que ya se había usado para el panel): login, primer PIN, bloqueo por pestaña nueva, 5 intentos fallidos, alta de visita manual, catálogo, carga de pedido vía `crear_pedido` y que el pedido recién cargado aparezca como "último pedido" — 17/17 casos, sin errores de consola.

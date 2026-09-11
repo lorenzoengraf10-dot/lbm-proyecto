@@ -6,6 +6,8 @@
 // Cuando haya un proyecto Supabase linkeado, conviene regenerarlo con:
 //   pnpm dlx supabase gen types typescript --linked > packages/shared/src/database.types.ts
 
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
 export type Database = {
   public: {
     Tables: {
@@ -15,7 +17,7 @@ export type Database = {
           nombre: string;
           username: string;
           rol: Database["public"]["Enums"]["rol_usuario"];
-          comision_pct: number | null;
+          comision_pct: number;
           activo: boolean;
           created_at: string;
         };
@@ -24,7 +26,10 @@ export type Database = {
           nombre: string;
           username: string;
           rol: Database["public"]["Enums"]["rol_usuario"];
-          comision_pct?: number | null;
+          // Opcional al insertar (el trigger set_comision_pct_default la
+          // completa desde configuracion si no se manda), pero la columna es
+          // "not null" — nunca vale null una vez insertada la fila.
+          comision_pct?: number;
           activo?: boolean;
           created_at?: string;
         };
@@ -33,7 +38,7 @@ export type Database = {
           nombre?: string;
           username?: string;
           rol?: Database["public"]["Enums"]["rol_usuario"];
-          comision_pct?: number | null;
+          comision_pct?: number;
           activo?: boolean;
           created_at?: string;
         };
@@ -248,13 +253,12 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
-      rol_actual: {
-        Args: Record<string, never>;
-        Returns: Database["public"]["Enums"]["rol_usuario"];
-      };
-      es_hoy_ar: {
-        Args: { momento: string };
-        Returns: boolean;
+      // rol_actual y es_hoy_ar viven en el schema privado desde la migración
+      // 20260910000001 (no expuestas por PostgREST) — nunca se llaman por
+      // rpc(), solo las usan las RLS y los triggers, así que no van acá.
+      crear_pedido: {
+        Args: { p_visita_id: string; p_items: Json };
+        Returns: string;
       };
     };
     Enums: {
