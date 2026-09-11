@@ -10,7 +10,8 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Etapa 2 — Panel admin**: completa. Login, comercios (CRUD + importación CSV), productos (CRUD) y alta de cuentas.
 - **Etapa 3 — QR**: completa. Cartel imprimible por comercio, individual y en hoja para toda la cartera.
 - **Etapa 4 — App del vendedor**: completa. Página web (no app nativa, ver `docs/PLAN.md` sección 9): login + PIN de desbloqueo, listado de comercios con buscador, escaneo de QR, carga de pedido y último pedido del comercio como referencia.
-- Falta el modo offline (etapa 5) y los reportes (etapa 6).
+- **Adelanto de etapa 6**: el panel admin ya tiene **Pedidos** (listado con filtros + detalle) y **Comisiones** (total vendido y a pagar por vendedor, por rango de fechas). Ver `docs/PLAN.md` sección 10.
+- Falta el modo offline (etapa 5) y el reporte PDF semanal (resto de la etapa 6).
 
 ## Ecosistema cerrado
 

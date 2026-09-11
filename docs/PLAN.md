@@ -1,6 +1,6 @@
 # Plan de Desarrollo — La Buena Medida (LBM)
 
-> **Estado: etapas 1, 2, 3 y 4 completas.** El plan de abajo quedó confirmado; las secciones 2 y 2.1 documentan las decisiones que se tomaron sobre los puntos ambiguos. La sección 6 anota las correcciones que salieron de la revisión de las dos primeras etapas. La sección 9 documenta un cambio de stack sobre lo acordado en la sección 3: la app del vendedor terminó siendo una página web, no una app nativa (React Native/Expo).
+> **Estado: etapas 1, 2, 3 y 4 completas**, más una parte de la 6 (ver pedidos y comisiones) adelantada. El plan de abajo quedó confirmado; las secciones 2 y 2.1 documentan las decisiones que se tomaron sobre los puntos ambiguos. La sección 6 anota las correcciones que salieron de la revisión de las dos primeras etapas. La sección 9 documenta un cambio de stack sobre lo acordado en la sección 3: la app del vendedor terminó siendo una página web, no una app nativa (React Native/Expo). La sección 10 tiene un bug importante para tener en cuenta en cualquier código nuevo que sume columnas `numeric`.
 
 ## 1. Resumen del entendimiento
 
@@ -149,3 +149,14 @@ La sección 3 proponía React Native + Expo para esta etapa, pensando en el modo
 **`crear_pedido`, una función de base en vez de dos inserts sueltos**: cargar un pedido son dos pasos (`pedidos` + `pedido_items`) que tienen que quedar los dos o ninguno — dos llamadas sueltas desde el cliente podían dejar un pedido sin ítems a mitad de camino. Se resolvió con una función Postgres (`supabase/migrations/20260910000003_funcion_crear_pedido.sql`) `security invoker` (no `definer`): corre con los permisos de quien la llama, así que sigue pasando por las mismas RLS de siempre — no es una puerta trasera, solo junta los dos inserts en una transacción. El precio de cada ítem se toma del catálogo en ese momento, nunca del cliente. A diferencia de `rol_actual()` y las otras funciones internas, esta sí se llama desde el cliente (`supabase.rpc('crear_pedido', ...)`), así que se deja pública a propósito.
 
 **Validado con un servidor Postgres+Auth de prueba** (el mismo enfoque que ya se había usado para el panel): login, primer PIN, bloqueo por pestaña nueva, 5 intentos fallidos, alta de visita manual, catálogo, carga de pedido vía `crear_pedido` y que el pedido recién cargado aparezca como "último pedido" — 17/17 casos, sin errores de consola.
+
+## 10. Panel: ver pedidos y comisiones (adelanto de la etapa 6)
+
+Con la app del vendedor ya cargando pedidos de verdad, el admin pidió poder verlos antes de llegar a la etapa 6 (dashboard + PDF semanal) propiamente dicha. Se agregaron dos secciones al panel:
+
+- **Pedidos** (`/pedidos`): todos los pedidos, con filtro por vendedor y por rango de fechas. `/pedidos/[id]` muestra el detalle (ítems, cantidades, precio unitario, subtotal).
+- **Comisiones** (`/comisiones`): por vendedor, cantidad de pedidos + total vendido + comisión a pagar (`total × comision_pct / 100`) en el rango de fechas elegido (sin filtro = todo el historial). Pensada para que el admin sepa cuánto pagarle a cada repartidor.
+
+Ninguna de las dos necesitó cambios de esquema ni de RLS: `pedidos_select`/`pedido_items_select` ya le dan al admin visibilidad total desde la etapa 1.
+
+**Bug real encontrado al probar** (no cosmético — daba `$ NaN`): `pedidos.total`, `usuarios.comision_pct` y el resto de las columnas `numeric` de Postgres llegan del lado del cliente como **string** (`"6400.00"`), no como number, para no perder precisión — esto vale tanto para el mock de prueba como para Supabase real. `+` en JS concatena texto en cuanto un operando es string en vez de sumar (`0 + "6400.00"` da `"06400.00"`, no `6400`), así que sumar esas columnas con un `reduce`/`+=` sin pasarlas por `Number(...)` primero rompe en silencio y termina en `NaN`. `*` y `/` sí convierten solos, por eso no hizo falta tocar el cálculo del total del pedido en la app del vendedor (ahí la multiplicación pasa antes que cualquier suma). Regla para código futuro (el reporte PDF de la etapa 6 va a sumar exactamente estas mismas columnas): **toda columna `numeric` que se vaya a sumar con `+`/`reduce` se convierte con `Number(...)` primero** — formatearla con `Intl.NumberFormat` sola (sin sumar) es seguro tal cual, el problema es específico de `+`.

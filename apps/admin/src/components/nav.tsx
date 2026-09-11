@@ -7,6 +7,8 @@ import { cerrarSesion } from "@/lib/sesion";
 const SECCIONES = [
   { href: "/comercios", etiqueta: "Comercios" },
   { href: "/productos", etiqueta: "Productos" },
+  { href: "/pedidos", etiqueta: "Pedidos" },
+  { href: "/comisiones", etiqueta: "Comisiones" },
   { href: "/usuarios", etiqueta: "Usuarios" },
 ];
 
