@@ -779,20 +779,27 @@ grant execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uui
 -- cerrado no debería depender de eso: si mañana se agrega un camino que no
 -- valide el rol, la puerta ya está abierta.
 --
--- Hay que revocarle a PUBLIC (eso también se lo saca a anon y a
--- authenticated) y después devolverle el permiso solo a quien lo necesita.
+-- Hay que revocarle a PUBLIC y TAMBIÉN a anon, porque son dos permisos
+-- distintos y sacar uno deja el otro:
+--   * el de PUBLIC lo trae Postgres de fábrica con cada función nueva,
+--   * el de anon lo agrega Supabase con sus "alter default privileges".
+-- Revocar solo a anon (lo que hacía la migración anterior) dejaba el
+-- heredado de PUBLIC, y revocar solo a PUBLIC deja el explícito de anon.
+-- Después se devuelve el permiso a quien de verdad lo necesita.
+--
 -- crear_pedido y actualizar_pedido son SECURITY INVOKER y las RLS ya las
 -- protegen, pero tampoco tienen por qué ser llamables sin sesión.
-revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) from public;
-revoke execute on function public.crear_pedido(uuid, jsonb) from public;
-revoke execute on function public.actualizar_pedido(uuid, jsonb) from public;
+revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) from public, anon;
+revoke execute on function public.crear_pedido(uuid, jsonb) from public, anon;
+revoke execute on function public.actualizar_pedido(uuid, jsonb) from public, anon;
 
 grant execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) to authenticated, service_role;
 grant execute on function public.crear_pedido(uuid, jsonb) to authenticated, service_role;
 grant execute on function public.actualizar_pedido(uuid, jsonb) to authenticated, service_role;
 
--- Que las funciones que se creen de acá en más no arranquen abiertas a PUBLIC.
+-- Que las funciones que se creen de acá en más no arranquen abiertas.
 alter default privileges in schema public revoke execute on functions from public;
+alter default privileges in schema public revoke execute on functions from anon;
 
 -- 2. Sincronización realmente idempotente.
 --
@@ -880,5 +887,5 @@ $$;
 
 -- create or replace repone los privilegios por defecto: hay que volver a
 -- cerrarla después de redefinirla.
-revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) from public;
+revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) from public, anon;
 grant execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) to authenticated, service_role;
