@@ -251,7 +251,20 @@ export type Database = {
         ];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      // Vista con security_invoker: ver 20260911000002_vista_cobertura.sql.
+      cobertura_comercios: {
+        Row: {
+          id: string;
+          codigo: string;
+          nombre: string;
+          localidad: string;
+          ultima_visita: string | null;
+          visitas_totales: number;
+        };
+        Relationships: [];
+      };
+    };
     Functions: {
       // rol_actual y es_hoy_ar viven en el schema privado desde la migración
       // 20260910000001 (no expuestas por PostgREST) — nunca se llaman por
