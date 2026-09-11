@@ -2,6 +2,7 @@
 
 import { normalizarCodigoComercio, validarCodigoComercio } from "@lbm/shared";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requerirAdmin } from "@/lib/auth";
 import { exito, fallo, mensajeDeError, type EstadoFormulario } from "@/lib/formularios";
 
@@ -69,6 +70,34 @@ export async function actualizarComercio(
   revalidatePath("/comercios");
   revalidatePath(`/comercios/${id}`);
   return exito("Cambios guardados.");
+}
+
+// Elimina el comercio de verdad (no la baja lógica de cambiarEstadoComercio).
+// Solo funciona si nunca tuvo visitas ni pedidos — si los tiene, se rechaza
+// para no perder ese histórico, y hay que darlo de baja en su lugar.
+export async function eliminarComercio(
+  _estadoPrevio: EstadoFormulario,
+  formData: FormData
+): Promise<EstadoFormulario> {
+  const { supabase } = await requerirAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return fallo("Falta el comercio a eliminar.");
+
+  const [{ count: visitas }, { count: pedidos }] = await Promise.all([
+    supabase.from("visitas").select("id", { count: "exact", head: true }).eq("comercio_id", id),
+    supabase.from("pedidos").select("id", { count: "exact", head: true }).eq("comercio_id", id),
+  ]);
+
+  if ((visitas ?? 0) > 0 || (pedidos ?? 0) > 0) {
+    return fallo("No se puede eliminar: ya tiene visitas o pedidos cargados. Dalo de baja en su lugar.");
+  }
+
+  const { error: errorDb } = await supabase.from("comercios").delete().eq("id", id);
+  if (errorDb) return fallo(mensajeDeError(errorDb, CODIGO_DUPLICADO));
+
+  revalidatePath("/comercios");
+  redirect("/comercios");
 }
 
 export async function cambiarEstadoComercio(formData: FormData): Promise<void> {

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BotonEliminar } from "@/components/boton-eliminar";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { formatearComision } from "@/lib/formato";
-import { cambiarEstadoUsuario } from "../actions";
+import { cambiarEstadoUsuario, eliminarUsuario } from "../actions";
+import { FormularioCambiarPassword } from "../formulario-cambiar-password";
 import { FormularioReset } from "../formulario-reset";
 
 export default async function PaginaUsuario({ params }: { params: Promise<{ id: string }> }) {
@@ -51,14 +53,26 @@ export default async function PaginaUsuario({ params }: { params: Promise<{ id: 
       </div>
 
       <div className={`${estilos.tarjeta} space-y-3 p-5`}>
-        <div>
-          <p className="text-sm font-medium text-stone-900">Credencial de acceso</p>
-          <p className="text-sm text-stone-500">
-            Sirve para configurar la app en un celular nuevo. Si se la olvidó o cambió de teléfono,
-            generá una nueva acá.
-          </p>
-        </div>
-        <FormularioReset id={usuario.id} nombre={usuario.nombre} />
+        {esUnoMismo ? (
+          <>
+            <div>
+              <p className="text-sm font-medium text-stone-900">Cambiar mi contraseña</p>
+              <p className="text-sm text-stone-500">Elegí vos la contraseña nueva.</p>
+            </div>
+            <FormularioCambiarPassword />
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="text-sm font-medium text-stone-900">Credencial de acceso</p>
+              <p className="text-sm text-stone-500">
+                Sirve para configurar la app en un celular nuevo. Si se la olvidó o cambió de
+                teléfono, generá una nueva acá.
+              </p>
+            </div>
+            <FormularioReset id={usuario.id} nombre={usuario.nombre} />
+          </>
+        )}
       </div>
 
       <div className={`${estilos.tarjeta} flex flex-wrap items-center justify-between gap-3 p-5`}>
@@ -87,6 +101,23 @@ export default async function PaginaUsuario({ params }: { params: Promise<{ id: 
           </form>
         )}
       </div>
+
+      {esUnoMismo ? null : (
+        <div className={`${estilos.tarjeta} flex flex-wrap items-center justify-between gap-3 p-5`}>
+          <div>
+            <p className="text-sm font-medium text-stone-900">Eliminar cuenta</p>
+            <p className="text-sm text-stone-500">
+              Borra la cuenta para siempre (a diferencia de dar de baja). Solo se puede si{" "}
+              {usuario.nombre} nunca cargó visitas ni pedidos.
+            </p>
+          </div>
+          <BotonEliminar
+            accion={eliminarUsuario}
+            id={usuario.id}
+            confirmacion={`Esto borra la cuenta de ${usuario.nombre} para siempre, no se puede deshacer. ¿Continuar?`}
+          />
+        </div>
+      )}
     </>
   );
 }

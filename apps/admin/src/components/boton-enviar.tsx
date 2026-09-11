@@ -3,13 +3,19 @@
 import { useFormStatus } from "react-dom";
 import { estilos } from "./ui";
 
+const CLASES_VARIANTE = {
+  primario: estilos.boton,
+  secundario: estilos.botonSecundario,
+  peligro: estilos.botonPeligro,
+} as const;
+
 export function BotonEnviar({
   children,
   variante = "primario",
   confirmacion,
 }: {
   children: React.ReactNode;
-  variante?: "primario" | "secundario";
+  variante?: keyof typeof CLASES_VARIANTE;
   confirmacion?: string;
 }) {
   const { pending } = useFormStatus();
@@ -21,7 +27,7 @@ export function BotonEnviar({
       onClick={confirmacion ? (evento) => {
         if (!window.confirm(confirmacion)) evento.preventDefault();
       } : undefined}
-      className={variante === "primario" ? estilos.boton : estilos.botonSecundario}
+      className={CLASES_VARIANTE[variante]}
     >
       {pending ? "Guardando…" : children}
     </button>

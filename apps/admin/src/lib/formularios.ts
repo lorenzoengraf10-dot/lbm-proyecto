@@ -19,10 +19,12 @@ export function fallo(mensaje: string): EstadoFormulario {
 }
 
 /** Traduce los errores de Postgres/PostgREST a algo que le sirva a quien usa el panel. */
-export function mensajeDeError(error: PostgrestError, duplicado: string): string {
+export function mensajeDeError(error: PostgrestError, duplicado: string, enUso?: string): string {
   switch (error.code) {
     case "23505":
       return duplicado;
+    case "23503":
+      return enUso ?? "No se puede eliminar: todavía está en uso en otro registro.";
     case "23514":
       return "Alguno de los datos no cumple una validación de la base.";
     case "42501":

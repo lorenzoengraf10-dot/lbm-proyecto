@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requerirAdmin } from "@/lib/auth";
 import { exito, fallo, mensajeDeError, type EstadoFormulario } from "@/lib/formularios";
 
@@ -66,6 +67,34 @@ export async function actualizarProducto(
   revalidatePath("/productos");
   revalidatePath(`/productos/${id}`);
   return exito("Cambios guardados.");
+}
+
+// Elimina el producto de verdad (no la baja lógica de cambiarEstadoProducto).
+// Solo funciona si nunca se vendió — si aparece en algún pedido, se rechaza
+// para no perder ese histórico, y hay que darlo de baja en su lugar.
+export async function eliminarProducto(
+  _estadoPrevio: EstadoFormulario,
+  formData: FormData
+): Promise<EstadoFormulario> {
+  const { supabase } = await requerirAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return fallo("Falta el producto a eliminar.");
+
+  const { count: enPedidos } = await supabase
+    .from("pedido_items")
+    .select("id", { count: "exact", head: true })
+    .eq("producto_id", id);
+
+  if ((enPedidos ?? 0) > 0) {
+    return fallo("No se puede eliminar: ya está en pedidos cargados. Dalo de baja en su lugar.");
+  }
+
+  const { error: errorDb } = await supabase.from("productos").delete().eq("id", id);
+  if (errorDb) return fallo(mensajeDeError(errorDb, NOMBRE_DUPLICADO));
+
+  revalidatePath("/productos");
+  redirect("/productos");
 }
 
 export async function cambiarEstadoProducto(formData: FormData): Promise<void> {

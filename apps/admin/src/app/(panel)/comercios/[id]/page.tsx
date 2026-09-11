@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BotonEliminar } from "@/components/boton-eliminar";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { cartelQr } from "@/lib/qr";
-import { actualizarComercio, cambiarEstadoComercio } from "../actions";
+import { actualizarComercio, cambiarEstadoComercio, eliminarComercio } from "../actions";
 import { FormularioComercio } from "../formulario";
 
 export default async function PaginaEditarComercio({
@@ -84,6 +85,21 @@ export default async function PaginaEditarComercio({
             {comercio.activo ? "Dar de baja" : "Reactivar"}
           </BotonEnviar>
         </form>
+      </div>
+
+      <div className={`${estilos.tarjeta} flex flex-wrap items-center justify-between gap-3 p-5`}>
+        <div>
+          <p className="text-sm font-medium text-stone-900">Eliminar comercio</p>
+          <p className="text-sm text-stone-500">
+            Lo borra para siempre (a diferencia de dar de baja). Solo se puede si nunca tuvo
+            visitas ni pedidos cargados.
+          </p>
+        </div>
+        <BotonEliminar
+          accion={eliminarComercio}
+          id={comercio.id}
+          confirmacion={`Esto borra ${comercio.codigo} para siempre, no se puede deshacer. ¿Continuar?`}
+        />
       </div>
     </>
   );

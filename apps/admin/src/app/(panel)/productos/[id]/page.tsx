@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BotonEliminar } from "@/components/boton-eliminar";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { actualizarProducto, cambiarEstadoProducto } from "../actions";
+import { actualizarProducto, cambiarEstadoProducto, eliminarProducto } from "../actions";
 import { FormularioProducto } from "../formulario";
 
 export default async function PaginaEditarProducto({
@@ -63,6 +64,20 @@ export default async function PaginaEditarProducto({
             {producto.activo ? "Dar de baja" : "Reactivar"}
           </BotonEnviar>
         </form>
+      </div>
+
+      <div className={`${estilos.tarjeta} flex flex-wrap items-center justify-between gap-3 p-5`}>
+        <div>
+          <p className="text-sm font-medium text-stone-900">Eliminar producto</p>
+          <p className="text-sm text-stone-500">
+            Lo borra para siempre (a diferencia de dar de baja). Solo se puede si nunca se vendió.
+          </p>
+        </div>
+        <BotonEliminar
+          accion={eliminarProducto}
+          id={producto.id}
+          confirmacion={`Esto borra "${producto.nombre}" para siempre, no se puede deshacer. ¿Continuar?`}
+        />
       </div>
     </>
   );
