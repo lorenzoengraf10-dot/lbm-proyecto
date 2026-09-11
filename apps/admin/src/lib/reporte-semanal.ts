@@ -1,3 +1,4 @@
+import { ordenarPorCodigo } from "@lbm/shared";
 import type { SesionAdmin } from "./auth";
 import type { Semana } from "./semana";
 
@@ -143,9 +144,9 @@ export async function armarReporteSemanal(
       activos: (comercios ?? []).length,
       visitados: visitados.size,
       visitas: (visitas ?? []).length,
-      noVisitados: (comercios ?? [])
-        .filter((comercio) => !visitados.has(comercio.id))
-        .map((comercio) => ({ codigo: comercio.codigo, nombre: comercio.nombre })),
+      noVisitados: ordenarPorCodigo(
+        (comercios ?? []).filter((comercio) => !visitados.has(comercio.id))
+      ).map((comercio) => ({ codigo: comercio.codigo, nombre: comercio.nombre })),
     },
   };
 }

@@ -1,3 +1,4 @@
+import { compararCodigosComercio } from "@lbm/shared";
 import Link from "next/link";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, estilos } from "@/components/ui";
@@ -35,7 +36,10 @@ export default async function PaginaCobertura({
       diasSinVisitar: comercio.ultima_visita ? diasDesde(comercio.ultima_visita) : Infinity,
     }))
     .filter((comercio) => (Number.isFinite(corte) && corte > 0 ? comercio.diasSinVisitar >= corte : true))
-    .sort((a, b) => b.diasSinVisitar - a.diasSinVisitar);
+    .sort(
+      (a, b) =>
+        b.diasSinVisitar - a.diasSinVisitar || compararCodigosComercio(a.codigo, b.codigo)
+    );
 
   const nuncaVisitados = filas.filter((comercio) => comercio.diasSinVisitar === Infinity).length;
 

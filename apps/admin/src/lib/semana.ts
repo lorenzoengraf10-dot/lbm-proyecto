@@ -41,6 +41,18 @@ export function semanaActual(): Semana {
   return semanaDesdeLunes(lunesDe(diaArgentina()));
 }
 
+// La semana viaja en la URL (?semana=2026-09-07), así que puede llegar
+// cualquier cosa. Sin validar, un valor raro reventaba en "Invalid time
+// value" y tanto la pantalla del reporte como la descarga del PDF se caían.
+const FORMATO_DIA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** La semana a la que pertenece el día dado. null si el día no sirve. */
+export function semanaDeDia(dia: string): Semana | null {
+  if (!FORMATO_DIA.test(dia)) return null;
+  if (Number.isNaN(new Date(`${dia}T12:00:00Z`).getTime())) return null;
+  return semanaDesdeLunes(lunesDe(dia));
+}
+
 /** Las últimas N semanas, de la más reciente a la más vieja. */
 export function ultimasSemanas(cantidad: number): Semana[] {
   const actual = semanaActual();

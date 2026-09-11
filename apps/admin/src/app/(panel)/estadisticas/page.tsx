@@ -58,9 +58,11 @@ export default async function PaginaEstadisticas({
   searchParams: Promise<{ mes?: string }>;
 }) {
   const { supabase } = await requerirAdmin();
-  const { mes } = await searchParams;
+  const { mes: mesPedido } = await searchParams;
 
-  const rango = mes ? mesDesdeValor(mes) : null;
+  // Un mes inválido en la URL se ignora: se muestra todo el historial.
+  const rango = mesPedido ? mesDesdeValor(mesPedido) : null;
+  const mes = rango?.valor;
   const estadisticas: Estadisticas = await armarEstadisticas(supabase, rango?.desde, rango?.hasta);
 
   return (

@@ -11,13 +11,16 @@ export default async function PaginaPedidos({
   searchParams: Promise<{ vendedor?: string; desde?: string; hasta?: string; mes?: string }>;
 }) {
   const { supabase } = await requerirAdmin();
-  const { vendedor, mes } = await searchParams;
+  const { vendedor, mes: mesPedido } = await searchParams;
   let { desde, hasta } = await searchParams;
 
   // El registro mensual: elegir un mes pisa cualquier Desde/Hasta escrito a
-  // mano, para no tener dos filtros de fecha compitiendo a la vez.
-  if (mes) {
-    const rango = mesDesdeValor(mes);
+  // mano, para no tener dos filtros de fecha compitiendo a la vez. Un mes que
+  // no existe (un enlace viejo, un pegado a medias) se ignora en vez de
+  // tumbar la pantalla.
+  const rango = mesPedido ? mesDesdeValor(mesPedido) : null;
+  const mes = rango?.valor;
+  if (rango) {
     desde = rango.desde;
     hasta = rango.hasta;
   }

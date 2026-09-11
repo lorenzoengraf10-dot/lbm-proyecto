@@ -25,7 +25,13 @@ function acortar(texto: string, maximo: number): string {
   return texto.length > maximo ? `${texto.slice(0, maximo - 1)}…` : texto;
 }
 
-function caminoDelQr(texto: string): { camino: string; modulos: number } {
+/**
+ * El QR como un único camino SVG. Exportado porque el PDF de la hoja de
+ * carteles lo dibuja igual (pdf-lib entiende caminos SVG): un solo camino
+ * pesa y renderiza muchísimo menos que un rectángulo por módulo, que para
+ * cien comercios serían decenas de miles de rectángulos.
+ */
+export function caminoDelQr(texto: string): { camino: string; modulos: number } {
   // Nivel Q (25% de recuperación): el cartel vive pegado en la pared de un
   // comercio y se ensucia, se raya o se despega de una punta.
   const qr = QRCode.create(texto, { errorCorrectionLevel: "Q" });

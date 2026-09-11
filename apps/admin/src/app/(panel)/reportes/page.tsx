@@ -3,7 +3,7 @@ import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { formatearCantidad, formatearComision, formatearPrecio } from "@/lib/formato";
 import { armarReporteSemanal } from "@/lib/reporte-semanal";
-import { etiquetaSemana, lunesDe, semanaActual, semanaDesdeLunes, ultimasSemanas } from "@/lib/semana";
+import { etiquetaSemana, semanaActual, semanaDeDia, ultimasSemanas } from "@/lib/semana";
 
 export default async function PaginaReportes({
   searchParams,
@@ -13,7 +13,8 @@ export default async function PaginaReportes({
   const { supabase } = await requerirAdmin();
   const { semana: semanaPedida } = await searchParams;
 
-  const semana = semanaPedida ? semanaDesdeLunes(lunesDe(semanaPedida)) : semanaActual();
+  // Una semana inválida en la URL se ignora: se muestra la semana en curso.
+  const semana = (semanaPedida ? semanaDeDia(semanaPedida) : null) ?? semanaActual();
   const reporte = await armarReporteSemanal(supabase, semana);
   const opciones = ultimasSemanas(12);
   const esSemanaActual = semana.lunes === semanaActual().lunes;

@@ -35,7 +35,8 @@ export default async function PaginaResumen({
   const { supabase, userId } = await requerirVendedor();
   const { mes: mesPedido } = await searchParams;
 
-  const mes = mesPedido ? mesDesdeValor(mesPedido) : mesActual();
+  // Si el mes de la URL no sirve, se muestra el mes en curso.
+  const mes = (mesPedido ? mesDesdeValor(mesPedido) : null) ?? mesActual();
 
   const [{ data: perfil }, { data: pedidos }, { count: visitas }, { data: comercios }, { data: productos }] =
     await Promise.all([
@@ -56,10 +57,20 @@ export default async function PaginaResumen({
       supabase.from("productos").select("id, nombre, unidad_medida"),
     ]);
 
+  // PostgREST manda el .in() en la URL y un id son ~37 caracteres: un mes
+  // cargado (varios cientos de pedidos) armaría una URL de decenas de kB que
+  // el servidor rechaza. Se pide de a tandas, igual que el panel.
   const idsPedidos = (pedidos ?? []).map((p) => p.id);
-  const { data: items } = idsPedidos.length
-    ? await supabase.from("pedido_items").select("pedido_id, producto_id, cantidad, subtotal").in("pedido_id", idsPedidos)
-    : { data: [] };
+  const tandas: string[][] = [];
+  for (let i = 0; i < idsPedidos.length; i += 200) {
+    tandas.push(idsPedidos.slice(i, i + 200));
+  }
+  const respuestas = await Promise.all(
+    tandas.map((tanda) =>
+      supabase.from("pedido_items").select("producto_id, cantidad, subtotal").in("pedido_id", tanda)
+    )
+  );
+  const items = respuestas.flatMap((respuesta) => respuesta.data ?? []);
 
   // Todas las columnas numeric llegan como string: sumarlas con + sin
   // convertir concatenaría texto en vez de sumar (ver docs/PLAN.md sección 10).
@@ -88,7 +99,7 @@ export default async function PaginaResumen({
     .slice(0, 8);
 
   const porProducto = new Map<string, { cantidad: number; importe: number }>();
-  for (const item of items ?? []) {
+  for (const item of items) {
     const actual = porProducto.get(item.producto_id) ?? { cantidad: 0, importe: 0 };
     actual.cantidad += Number(item.cantidad);
     actual.importe += Number(item.subtotal);

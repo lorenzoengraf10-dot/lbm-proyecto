@@ -1,16 +1,14 @@
 import { requerirAdmin } from "@/lib/auth";
 import { pdfSemanal } from "@/lib/pdf-semanal";
 import { armarReporteSemanal } from "@/lib/reporte-semanal";
-import { lunesDe, semanaActual, semanaDesdeLunes } from "@/lib/semana";
-
-const FORMATO_DIA = /^\d{4}-\d{2}-\d{2}$/;
+import { semanaActual, semanaDeDia } from "@/lib/semana";
 
 export async function GET(request: Request) {
   // Es un endpoint propio, no una página: el guard va acá también.
   const { supabase } = await requerirAdmin();
 
   const pedido = new URL(request.url).searchParams.get("semana");
-  const semana = pedido && FORMATO_DIA.test(pedido) ? semanaDesdeLunes(lunesDe(pedido)) : semanaActual();
+  const semana = (pedido ? semanaDeDia(pedido) : null) ?? semanaActual();
 
   const reporte = await armarReporteSemanal(supabase, semana);
   const pdf = await pdfSemanal(semana, reporte);

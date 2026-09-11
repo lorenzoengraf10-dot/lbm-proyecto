@@ -15,6 +15,7 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - El vendedor puede además **corregir o anular** un pedido el mismo día que lo cargó; pasada esa ventana queda fijo, para no mover comisiones ya reportadas.
 - El admin puede **ver el registro por mes y corregir cualquier pedido**, incluso viejo, desde su detalle — queda anotado quién, cuándo y por qué (`docs/PLAN.md` sección 13).
 - **Estadísticas** (admin): qué comercios compran más, qué productos se venden más y cómo viene cada vendedor, por período. El vendedor tiene su versión personal en **Resumen** (`docs/PLAN.md` sección 14).
+- **Carteles QR en PDF**: desde *Comercios → QR para imprimir*, un PDF con todos los carteles (QR + código + nombre), seis por hoja A4 en tamaño real, listo para llevar a una imprenta (`docs/PLAN.md` sección 15).
 
 ## Ecosistema cerrado
 
@@ -109,7 +110,8 @@ El CSV necesita las columnas `codigo,nombre,localidad`. Los códigos se guardan 
 Cada comercio tiene su cartel de 7×9 cm con el QR, el código y el nombre:
 
 - **Uno solo**: desde la ficha del comercio, "Descargar para imprimir" (SVG, se imprime nítido a cualquier tamaño).
-- **Todos**: **Comercios → QR para imprimir** arma una hoja con los carteles de todos los comercios activos y se manda a la impresora con el botón "Imprimir". Se recortan por la línea de puntos.
+- **Todos, en PDF**: **Comercios → QR para imprimir → Descargar PDF**. Seis carteles por hoja A4 en tamaño real, con el QR, el código bien grande y el nombre abajo. Es lo más cómodo para llevar a una imprenta. `?incluir=todos` suma los comercios dados de baja.
+- **Todos, desde el navegador**: la misma pantalla tiene el botón "Imprimir", que manda la hoja a la impresora de la máquina. Se recortan por la línea de puntos.
 
 El QR guarda `LBM:<código>` como texto plano. No es un link: si alguien lo escanea con la cámara del celular no lo lleva a ningún lado, solo la app del vendedor lo entiende.
 

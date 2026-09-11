@@ -1,5 +1,6 @@
 "use client";
 
+import { ordenarPorCodigo } from "@lbm/shared";
 import { crearClienteNavegador } from "./supabase-browser";
 import {
   encolar,
@@ -98,7 +99,8 @@ export async function refrescarCatalogo(): Promise<void> {
   ]);
 
   if (comercios && productos) {
-    await guardarCatalogo(comercios, productos);
+    // CP2 antes que CP10: el vendedor busca por código en la lista.
+    await guardarCatalogo(ordenarPorCodigo(comercios), productos);
   }
   if (perfil?.nombre) {
     await guardarPerfil(perfil.nombre);

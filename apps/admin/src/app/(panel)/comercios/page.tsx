@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ordenarPorCodigo } from "@lbm/shared";
 import { Desplegable } from "@/components/desplegable";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, Etiqueta, estilos } from "@/components/ui";
@@ -22,7 +23,7 @@ export default async function PaginaComercios({
 
   // La cartera son unos cientos de comercios: filtrar en memoria evita armar
   // filtros de PostgREST con texto que escribe el usuario.
-  const visibles = (comercios ?? []).filter((comercio) =>
+  const visibles = ordenarPorCodigo(comercios ?? []).filter((comercio) =>
     busqueda
       ? comercio.codigo.toLowerCase().includes(busqueda) ||
         comercio.nombre.toLowerCase().includes(busqueda) ||
