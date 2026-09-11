@@ -6,6 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "pnpm -r --if-present run typecheck"
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint"
   }
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tabla } from "@/components/tabla";
 import { EstadoVacio, Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { formatearComision, formatearPrecio } from "@/lib/formato";
@@ -74,55 +75,36 @@ export default async function PaginaComisiones({
         </span>
       </form>
 
-      <div className={`${estilos.tarjeta} overflow-hidden`}>
-        {error ? (
+      {error ? (
+        <div className={`${estilos.tarjeta} overflow-hidden`}>
           <EstadoVacio>No se pudieron cargar los pedidos: {error.message}</EstadoVacio>
-        ) : filas.length === 0 ? (
-          <EstadoVacio>Todavía no hay vendedores cargados.</EstadoVacio>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] border-collapse">
-              <thead className="border-b border-stone-200 bg-stone-50">
-                <tr>
-                  <th className={estilos.encabezadoCelda}>Vendedor</th>
-                  <th className={estilos.encabezadoCelda}>Comisión</th>
-                  <th className={estilos.encabezadoCelda}>Pedidos</th>
-                  <th className={estilos.encabezadoCelda}>Total vendido</th>
-                  <th className={estilos.encabezadoCelda}>A pagar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {filas.map((fila) => (
-                  <tr key={fila.id}>
-                    <td className={`${estilos.celda} font-medium text-stone-900`}>
-                      {fila.nombre} {fila.activo ? null : <Etiqueta activo={false} />}
-                    </td>
-                    <td className={estilos.celda}>{formatearComision(fila.comision_pct)}</td>
-                    <td className={estilos.celda}>{fila.cantidad}</td>
-                    <td className={estilos.celda}>{formatearPrecio(fila.totalVendido)}</td>
-                    <td className={`${estilos.celda} font-medium text-stone-900`}>
-                      {formatearPrecio(fila.comision)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t border-stone-200 bg-stone-50">
-                <tr>
-                  <td className={`${estilos.celda} font-semibold text-stone-900`} colSpan={3}>
-                    Total
-                  </td>
-                  <td className={`${estilos.celda} font-semibold text-stone-900`}>
-                    {formatearPrecio(totalGeneral)}
-                  </td>
-                  <td className={`${estilos.celda} font-semibold text-stone-900`}>
-                    {formatearPrecio(comisionGeneral)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <Tabla
+          filas={filas}
+          clave={(fila) => fila.id}
+          vacio="Todavía no hay vendedores cargados."
+          columnas={[
+            {
+              encabezado: "Vendedor",
+              principal: true,
+              celda: (fila) => (
+                <>
+                  {fila.nombre} {fila.activo ? null : <Etiqueta activo={false} />}
+                </>
+              ),
+            },
+            { encabezado: "Comisión", celda: (fila) => formatearComision(fila.comision_pct) },
+            { encabezado: "Pedidos", celda: (fila) => fila.cantidad },
+            { encabezado: "Total vendido", celda: (fila) => formatearPrecio(fila.totalVendido) },
+            { encabezado: "A pagar", celda: (fila) => formatearPrecio(fila.comision) },
+          ]}
+          pie={[
+            { etiqueta: "Total vendido", valor: formatearPrecio(totalGeneral) },
+            { etiqueta: "A pagar", valor: formatearPrecio(comisionGeneral) },
+          ]}
+        />
+      )}
     </>
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Desplegable } from "@/components/desplegable";
-import { EstadoVacio, Etiqueta, SoloLectores, estilos } from "@/components/ui";
+import { Tabla } from "@/components/tabla";
+import { EstadoVacio, Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { crearComercio } from "./actions";
 import { FormularioComercio } from "./formulario";
@@ -60,57 +61,51 @@ export default async function PaginaComercios({
         </button>
       </form>
 
-      <div className={`${estilos.tarjeta} overflow-hidden`}>
-        {error ? (
+      {error ? (
+        <div className={`${estilos.tarjeta} overflow-hidden`}>
           <EstadoVacio>No se pudieron cargar los comercios: {error.message}</EstadoVacio>
-        ) : visibles.length === 0 ? (
-          <EstadoVacio>
-            {busqueda
+        </div>
+      ) : (
+        <Tabla
+          filas={visibles}
+          clave={(comercio) => comercio.id}
+          vacio={
+            busqueda
               ? "Ningún comercio coincide con la búsqueda."
-              : "Todavía no hay comercios cargados."}
-          </EstadoVacio>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] border-collapse">
-              <thead className="border-b border-stone-200 bg-stone-50">
-                <tr>
-                  <th className={estilos.encabezadoCelda}>Código</th>
-                  <th className={estilos.encabezadoCelda}>Nombre</th>
-                  <th className={estilos.encabezadoCelda}>Localidad</th>
-                  <th className={estilos.encabezadoCelda}>Teléfono</th>
-                  <th className={estilos.encabezadoCelda}>Estado</th>
-                  <th className={estilos.encabezadoCelda}>
-                    <SoloLectores>Acciones</SoloLectores>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {visibles.map((comercio) => (
-                  <tr key={comercio.id}>
-                    <td className={`${estilos.celda} font-medium text-stone-900`}>
-                      {comercio.codigo}
-                    </td>
-                    <td className={estilos.celda}>{comercio.nombre}</td>
-                    <td className={estilos.celda}>{comercio.localidad}</td>
-                    <td className={estilos.celda}>{comercio.telefono ?? "—"}</td>
-                    <td className={estilos.celda}>
-                      <Etiqueta activo={comercio.activo} />
-                    </td>
-                    <td className={`${estilos.celda} text-right`}>
-                      <Link
-                        href={`/comercios/${comercio.id}`}
-                        className="text-stone-600 underline hover:text-stone-900"
-                      >
-                        Editar
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              : "Todavía no hay comercios cargados."
+          }
+          columnas={[
+            {
+              encabezado: "Comercio",
+              principal: true,
+              celda: (comercio) => (
+                <Link href={`/comercios/${comercio.id}`} className="hover:underline">
+                  {comercio.codigo} · {comercio.nombre}
+                </Link>
+              ),
+            },
+            { encabezado: "Localidad", celda: (comercio) => comercio.localidad },
+            {
+              encabezado: "Teléfono",
+              soloEscritorio: true,
+              celda: (comercio) => comercio.telefono ?? "—",
+            },
+            { encabezado: "Estado", celda: (comercio) => <Etiqueta activo={comercio.activo} /> },
+            {
+              encabezado: "Acciones",
+              soloEscritorio: true,
+              celda: (comercio) => (
+                <Link
+                  href={`/comercios/${comercio.id}`}
+                  className="text-stone-600 underline hover:text-stone-900"
+                >
+                  Editar
+                </Link>
+              ),
+            },
+          ]}
+        />
+      )}
 
       <p className="text-sm text-stone-500">
         {visibles.length} de {comercios?.length ?? 0} comercios

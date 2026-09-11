@@ -42,5 +42,5 @@ export async function iniciarSesion(
     return { error: "Esta cuenta no tiene acceso al panel de administración." };
   }
 
-  redirect("/comercios");
+  redirect("/");
 }

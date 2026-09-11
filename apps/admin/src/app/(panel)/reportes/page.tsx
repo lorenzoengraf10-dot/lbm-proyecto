@@ -1,4 +1,5 @@
-import { EstadoVacio, estilos } from "@/components/ui";
+import { Tabla } from "@/components/tabla";
+import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { formatearCantidad, formatearComision, formatearPrecio } from "@/lib/formato";
 import { armarReporteSemanal } from "@/lib/reporte-semanal";
@@ -65,52 +66,37 @@ export default async function PaginaReportes({
         </div>
       </div>
 
-      <div className={`${estilos.tarjeta} overflow-hidden`}>
-        <p className="border-b border-stone-200 bg-stone-50 px-4 py-2 text-sm font-semibold text-stone-900">
-          Por vendedor
-        </p>
-        {reporte.vendedores.length === 0 ? (
-          <EstadoVacio>Sin ventas en esta semana.</EstadoVacio>
-        ) : (
-          <table className="w-full border-collapse">
-            <tbody className="divide-y divide-stone-100">
-              {reporte.vendedores.map((fila) => (
-                <tr key={fila.nombre}>
-                  <td className={`${estilos.celda} font-medium text-stone-900`}>{fila.nombre}</td>
-                  <td className={estilos.celda}>{fila.pedidos} pedidos</td>
-                  <td className={estilos.celda}>{formatearPrecio(fila.totalVendido)}</td>
-                  <td className={`${estilos.celda} font-medium text-stone-900`}>
-                    {formatearPrecio(fila.comision)} ({formatearComision(fila.comisionPct)})
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <h2 className="text-sm font-semibold text-stone-900">Por vendedor</h2>
+      <Tabla
+        filas={reporte.vendedores}
+        clave={(fila) => fila.nombre}
+        vacio="Sin ventas en esta semana."
+        columnas={[
+          { encabezado: "Vendedor", principal: true, celda: (fila) => fila.nombre },
+          { encabezado: "Pedidos", celda: (fila) => fila.pedidos },
+          { encabezado: "Vendido", celda: (fila) => formatearPrecio(fila.totalVendido) },
+          {
+            encabezado: "Comisión",
+            celda: (fila) =>
+              `${formatearPrecio(fila.comision)} (${formatearComision(fila.comisionPct)})`,
+          },
+        ]}
+      />
 
-      <div className={`${estilos.tarjeta} overflow-hidden`}>
-        <p className="border-b border-stone-200 bg-stone-50 px-4 py-2 text-sm font-semibold text-stone-900">
-          Por producto
-        </p>
-        {reporte.productos.length === 0 ? (
-          <EstadoVacio>Sin ventas en esta semana.</EstadoVacio>
-        ) : (
-          <table className="w-full border-collapse">
-            <tbody className="divide-y divide-stone-100">
-              {reporte.productos.map((fila) => (
-                <tr key={fila.nombre}>
-                  <td className={`${estilos.celda} font-medium text-stone-900`}>{fila.nombre}</td>
-                  <td className={estilos.celda}>
-                    {formatearCantidad(fila.cantidad)} {fila.unidad}
-                  </td>
-                  <td className={estilos.celda}>{formatearPrecio(fila.importe)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <h2 className="text-sm font-semibold text-stone-900">Por producto</h2>
+      <Tabla
+        filas={reporte.productos}
+        clave={(fila) => fila.nombre}
+        vacio="Sin ventas en esta semana."
+        columnas={[
+          { encabezado: "Producto", principal: true, celda: (fila) => fila.nombre },
+          {
+            encabezado: "Cantidad",
+            celda: (fila) => `${formatearCantidad(fila.cantidad)} ${fila.unidad}`,
+          },
+          { encabezado: "Importe", celda: (fila) => formatearPrecio(fila.importe) },
+        ]}
+      />
 
       <div className={`${estilos.tarjeta} space-y-2 p-5`}>
         <p className="text-sm font-semibold text-stone-900">Cobertura</p>

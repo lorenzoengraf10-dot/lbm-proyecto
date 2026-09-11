@@ -1,10 +1,7 @@
-import { diaArgentina } from "./fechas";
+import { OFFSET_ARGENTINA, diaArgentina } from "./fechas";
 
 // La semana del negocio es lunes a domingo en huso Argentina (docs/PLAN.md,
-// punto 6 de las ambigüedades). Argentina no usa horario de verano desde
-// 2009, así que el offset -03:00 es fijo; si algún día vuelve, este archivo
-// es el único lugar a tocar.
-const OFFSET_ARGENTINA = "-03:00";
+// punto 6 de las ambigüedades).
 
 export interface Semana {
   /** Lunes, en formato YYYY-MM-DD. */

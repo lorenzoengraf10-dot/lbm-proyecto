@@ -41,7 +41,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && esRutaPublica) {
-    return redirigir(request, response, "/comercios");
+    return redirigir(request, response, "/");
   }
 
   return response;

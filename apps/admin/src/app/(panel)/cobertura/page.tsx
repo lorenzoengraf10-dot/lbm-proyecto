@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tabla } from "@/components/tabla";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { diasDesde } from "@/lib/fechas";
@@ -64,58 +65,53 @@ export default async function PaginaCobertura({
         </button>
       </form>
 
-      <div className={`${estilos.tarjeta} overflow-hidden`}>
-        {error ? (
+      {error ? (
+        <div className={`${estilos.tarjeta} overflow-hidden`}>
           <EstadoVacio>No se pudo cargar la cobertura: {error.message}</EstadoVacio>
-        ) : filas.length === 0 ? (
-          <EstadoVacio>
-            {corte > 0
+        </div>
+      ) : (
+        <Tabla
+          filas={filas}
+          clave={(comercio) => comercio.id}
+          vacio={
+            corte > 0
               ? `Ningún comercio lleva ${corte} días o más sin visitar. Buen trabajo.`
-              : "Todavía no hay comercios activos."}
-          </EstadoVacio>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] border-collapse">
-              <thead className="border-b border-stone-200 bg-stone-50">
-                <tr>
-                  <th className={estilos.encabezadoCelda}>Comercio</th>
-                  <th className={estilos.encabezadoCelda}>Localidad</th>
-                  <th className={estilos.encabezadoCelda}>Última visita</th>
-                  <th className={estilos.encabezadoCelda}>Hace</th>
-                  <th className={estilos.encabezadoCelda}>Visitas</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {filas.map((comercio) => (
-                  <tr key={comercio.id}>
-                    <td className={`${estilos.celda} font-medium text-stone-900`}>
-                      <Link href={`/comercios/${comercio.id}`} className="hover:underline">
-                        {comercio.codigo} · {comercio.nombre}
-                      </Link>
-                    </td>
-                    <td className={estilos.celda}>{comercio.localidad}</td>
-                    <td className={estilos.celda}>
-                      {comercio.ultima_visita ? formatearFechaHora(comercio.ultima_visita) : "—"}
-                    </td>
-                    <td className={estilos.celda}>
-                      {comercio.diasSinVisitar === Infinity ? (
-                        <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                          Nunca visitado
-                        </span>
-                      ) : comercio.diasSinVisitar === 0 ? (
-                        "Hoy"
-                      ) : (
-                        `${comercio.diasSinVisitar} día${comercio.diasSinVisitar === 1 ? "" : "s"}`
-                      )}
-                    </td>
-                    <td className={estilos.celda}>{comercio.visitas_totales}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              : "Todavía no hay comercios activos."
+          }
+          columnas={[
+            {
+              encabezado: "Comercio",
+              principal: true,
+              celda: (comercio) => (
+                <Link href={`/comercios/${comercio.id}`} className="hover:underline">
+                  {comercio.codigo} · {comercio.nombre}
+                </Link>
+              ),
+            },
+            { encabezado: "Localidad", celda: (comercio) => comercio.localidad },
+            {
+              encabezado: "Última visita",
+              soloEscritorio: true,
+              celda: (comercio) =>
+                comercio.ultima_visita ? formatearFechaHora(comercio.ultima_visita) : "—",
+            },
+            {
+              encabezado: "Hace",
+              celda: (comercio) =>
+                comercio.diasSinVisitar === Infinity ? (
+                  <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                    Nunca visitado
+                  </span>
+                ) : comercio.diasSinVisitar === 0 ? (
+                  "Hoy"
+                ) : (
+                  `${comercio.diasSinVisitar} día${comercio.diasSinVisitar === 1 ? "" : "s"}`
+                ),
+            },
+            { encabezado: "Visitas", celda: (comercio) => comercio.visitas_totales },
+          ]}
+        />
+      )}
 
       <p className="text-sm text-stone-500">
         {filas.length} comercios listados

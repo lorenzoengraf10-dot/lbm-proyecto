@@ -4,14 +4,19 @@ const formatoPrecio = new Intl.NumberFormat("es-AR", {
   minimumFractionDigits: 2,
 });
 
-export function formatearPrecio(valor: number): string {
-  return formatoPrecio.format(valor);
+// Las columnas numeric de Postgres llegan como string ("6400.00") para no
+// perder precisión, y los tipos generados igual las declaran como number.
+// Aceptar los dos y convertir acá evita tener que acordarse en cada pantalla.
+export function formatearPrecio(valor: number | string): string {
+  return formatoPrecio.format(Number(valor));
 }
 
+const formatoComision = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
+
 /** 3.00 -> "3%", 2.50 -> "2,5%" */
-export function formatearComision(valor: number | null): string {
+export function formatearComision(valor: number | string | null): string {
   if (valor === null) return "—";
-  return `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(valor)}%`;
+  return `${formatoComision.format(Number(valor))}%`;
 }
 
 const formatoFechaHora = new Intl.DateTimeFormat("es-AR", {

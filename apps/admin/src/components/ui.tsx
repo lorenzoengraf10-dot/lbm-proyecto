@@ -68,3 +68,25 @@ export function Etiqueta({ activo }: { activo: boolean }) {
 export function EstadoVacio({ children }: { children: ReactNode }) {
   return <p className="px-4 py-8 text-center text-sm text-stone-500">{children}</p>;
 }
+
+/**
+ * El esqueleto que se ve mientras la página va a buscar los datos. Sin esto
+ * el panel se queda con la pantalla anterior congelada y parece colgado,
+ * sobre todo con los datos móviles del pueblo.
+ */
+export function Cargando({ filas = 5 }: { filas?: number }) {
+  return (
+    <div className="animate-pulse space-y-6" aria-busy="true">
+      <div className="h-6 w-40 rounded bg-stone-200" />
+      <div className={`${estilos.tarjeta} divide-y divide-stone-100`}>
+        {Array.from({ length: filas }, (_, i) => (
+          <div key={i} className="flex items-center justify-between gap-4 px-4 py-4">
+            <div className="h-4 w-1/3 rounded bg-stone-200" />
+            <div className="h-4 w-16 rounded bg-stone-100" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Cargando…</span>
+    </div>
+  );
+}

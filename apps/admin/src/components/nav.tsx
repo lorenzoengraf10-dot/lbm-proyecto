@@ -19,10 +19,25 @@ export function Nav({ nombre }: { nombre: string }) {
 
   return (
     <header className="border-b border-stone-200 bg-white print:hidden">
-      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3">
-        <span className="font-semibold text-stone-900">La Buena Medida</span>
+      <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
+        <Link href="/" className="font-semibold text-stone-900">
+          La Buena Medida
+        </Link>
 
-        <nav className="flex gap-1">
+        <div className="ml-auto flex items-center gap-3">
+          <span className="hidden text-sm text-stone-500 sm:inline">{nombre}</span>
+          <form action={cerrarSesion}>
+            <button type="submit" className="text-sm text-stone-500 underline hover:text-stone-900">
+              Salir
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* En el celular las siete secciones no entran: se arrastran de costado
+          en vez de apilarse en tres renglones y comerse media pantalla. */}
+      <nav className="mx-auto w-full max-w-5xl overflow-x-auto px-4 pb-2 sm:px-6">
+        <div className="flex w-max gap-1">
           {SECCIONES.map((seccion) => {
             const activa = rutaActual.startsWith(seccion.href);
             return (
@@ -30,7 +45,7 @@ export function Nav({ nombre }: { nombre: string }) {
                 key={seccion.href}
                 href={seccion.href}
                 aria-current={activa ? "page" : undefined}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                className={`rounded-md px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
                   activa
                     ? "bg-stone-900 text-white"
                     : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
@@ -40,17 +55,8 @@ export function Nav({ nombre }: { nombre: string }) {
               </Link>
             );
           })}
-        </nav>
-
-        <div className="ml-auto flex items-center gap-3">
-          <span className="text-sm text-stone-500">{nombre}</span>
-          <form action={cerrarSesion}>
-            <button type="submit" className="text-sm text-stone-500 underline hover:text-stone-900">
-              Salir
-            </button>
-          </form>
         </div>
-      </div>
+      </nav>
     </header>
   );
 }
