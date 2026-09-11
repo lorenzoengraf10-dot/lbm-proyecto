@@ -3,21 +3,33 @@
 import type { Tabla } from "@lbm/shared";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Mensaje, estilos } from "@/components/ui";
 import { formatearPrecio } from "@/lib/formato";
-import { crearPedido, type ItemPedido } from "../actions";
+import { Mensaje, estilos } from "./ui";
 
-type Producto = Pick<Tabla<"productos">, "id" | "nombre" | "precio" | "unidad_medida">;
+export type ProductoCatalogo = Pick<Tabla<"productos">, "id" | "nombre" | "precio" | "unidad_medida">;
+
+export interface ItemPedido {
+  productoId: string;
+  cantidad: number;
+}
 
 export function FormularioPedido({
-  visitaId,
   productos,
+  cantidadesIniciales,
+  textoBoton,
+  destino,
+  onGuardar,
 }: {
-  visitaId: string;
-  productos: Producto[];
+  productos: ProductoCatalogo[];
+  /** Para editar: cantidades ya cargadas, por id de producto. */
+  cantidadesIniciales?: Record<string, string>;
+  textoBoton: string;
+  /** A dónde ir después de guardar. */
+  destino: string;
+  onGuardar: (items: ItemPedido[]) => Promise<{ error: string | null }>;
 }) {
   const router = useRouter();
-  const [cantidades, setCantidades] = useState<Record<string, string>>({});
+  const [cantidades, setCantidades] = useState<Record<string, string>>(cantidadesIniciales ?? {});
   const [error, setError] = useState<string | null>(null);
   const [pendiente, iniciarTransicion] = useTransition();
 
@@ -26,30 +38,28 @@ export function FormularioPedido({
       productoId: producto.id,
       cantidad: Number(String(cantidades[producto.id] ?? "").replace(",", ".")),
     }))
-    .filter((item) => item.cantidad > 0);
+    .filter((item) => Number.isFinite(item.cantidad) && item.cantidad > 0);
 
   const total = items.reduce((acumulado, item) => {
     const producto = productos.find((p) => p.id === item.productoId);
-    return acumulado + (producto ? producto.precio * item.cantidad : 0);
+    return acumulado + (producto ? Number(producto.precio) * item.cantidad : 0);
   }, 0);
 
-  function confirmar() {
+  function guardar() {
     setError(null);
     iniciarTransicion(async () => {
-      const resultado = await crearPedido(visitaId, items);
+      const resultado = await onGuardar(items);
       if (resultado.error) {
         setError(resultado.error);
         return;
       }
-      router.push("/comercios");
+      router.push(destino);
       router.refresh();
     });
   }
 
   return (
     <div className={`${estilos.tarjeta} space-y-3 p-4`}>
-      <p className="text-sm font-medium text-stone-900">Cargar pedido</p>
-
       {productos.length === 0 ? (
         <p className="text-sm text-stone-500">Todavía no hay productos activos en el catálogo.</p>
       ) : (
@@ -59,13 +69,14 @@ export function FormularioPedido({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-stone-900">{producto.nombre}</p>
                 <p className="text-xs text-stone-500">
-                  {formatearPrecio(producto.precio)} / {producto.unidad_medida}
+                  {formatearPrecio(Number(producto.precio))} / {producto.unidad_medida}
                 </p>
               </div>
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="0"
+                aria-label={`Cantidad de ${producto.nombre}`}
                 value={cantidades[producto.id] ?? ""}
                 onChange={(evento) =>
                   setCantidades((prev) => ({ ...prev, [producto.id]: evento.target.value }))
@@ -87,10 +98,10 @@ export function FormularioPedido({
       <button
         type="button"
         disabled={pendiente || items.length === 0}
-        onClick={confirmar}
+        onClick={guardar}
         className={`w-full ${estilos.boton}`}
       >
-        {pendiente ? "Guardando…" : "Confirmar pedido"}
+        {pendiente ? "Guardando…" : textoBoton}
       </button>
     </div>
   );

@@ -260,6 +260,10 @@ export type Database = {
         Args: { p_visita_id: string; p_items: Json };
         Returns: string;
       };
+      actualizar_pedido: {
+        Args: { p_pedido_id: string; p_items: Json };
+        Returns: undefined;
+      };
     };
     Enums: {
       rol_usuario: "admin" | "vendedor";

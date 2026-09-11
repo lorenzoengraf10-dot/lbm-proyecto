@@ -6,7 +6,8 @@ import { cerrarSesion } from "@/lib/sesion";
 
 const PESTAÑAS = [
   { href: "/comercios", etiqueta: "Comercios" },
-  { href: "/escanear", etiqueta: "Escanear QR" },
+  { href: "/escanear", etiqueta: "Escanear" },
+  { href: "/mis-pedidos", etiqueta: "Mis pedidos" },
 ];
 
 export function EncabezadoSuperior({ nombre }: { nombre: string }) {

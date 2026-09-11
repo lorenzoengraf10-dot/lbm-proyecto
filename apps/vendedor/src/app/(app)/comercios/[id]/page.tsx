@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FormularioPedido } from "@/components/formulario-pedido";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
+import { esDeHoy } from "@/lib/fechas";
 import { formatearCantidad, formatearFechaHora, formatearPrecio } from "@/lib/formato";
-import { registrarVisitaManualDesdeForm } from "../actions";
-import { FormularioPedido } from "./formulario-pedido";
+import { crearPedido, registrarVisitaManualDesdeForm } from "../actions";
 
 export default async function PaginaComercio({
   params,
@@ -74,13 +75,26 @@ export default async function PaginaComercio({
           <p className="mt-2 text-sm font-medium text-stone-900">
             Total: {formatearPrecio(ultimoPedido.total)}
           </p>
+          {esDeHoy(ultimoPedido.fecha) ? (
+            <Link
+              href={`/mis-pedidos/${ultimoPedido.id}`}
+              className="mt-3 inline-block text-sm text-stone-600 underline"
+            >
+              Corregir o anular este pedido
+            </Link>
+          ) : null}
         </div>
       ) : (
         <EstadoVacio>Todavía no le cargaste ningún pedido a este comercio.</EstadoVacio>
       )}
 
       {visita ? (
-        <FormularioPedido visitaId={visita} productos={productosActivos} />
+        <FormularioPedido
+          productos={productosActivos}
+          textoBoton="Confirmar pedido"
+          destino="/comercios"
+          onGuardar={crearPedido.bind(null, visita)}
+        />
       ) : (
         <div className={`${estilos.tarjeta} space-y-3 p-4`}>
           <p className="text-sm text-stone-600">Para cargar un pedido, primero registrá la visita.</p>
