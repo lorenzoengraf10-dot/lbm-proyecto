@@ -13,6 +13,7 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Etapa 5 — Modo sin señal**: completa. El catálogo queda guardado en el celular y lo que el vendedor carga va a una cola local que se sube sola cuando vuelve la señal. Los identificadores se generan en el celular, así que reintentar no duplica nada.
 - **Etapa 6 — Pedidos, comisiones y reportes**: completa. El panel tiene **Pedidos** (listado con filtros + detalle), **Comisiones** (total vendido y a pagar por vendedor, por rango), **Cobertura** (hace cuánto que nadie visita cada comercio) y el **Reporte semanal** con descarga en PDF.
 - El vendedor puede además **corregir o anular** un pedido el mismo día que lo cargó; pasada esa ventana queda fijo, para no mover comisiones ya reportadas.
+- El admin puede **ver el registro por mes y corregir cualquier pedido**, incluso viejo, desde su detalle — queda anotado quién, cuándo y por qué (`docs/PLAN.md` sección 13).
 
 ## Ecosistema cerrado
 

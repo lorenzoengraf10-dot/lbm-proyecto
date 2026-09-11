@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Desplegable } from "@/components/desplegable";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { formatearCantidad, formatearFechaHora, formatearPrecio } from "@/lib/formato";
+import { corregirPedido } from "./actions";
+import { FormularioCorreccion } from "./formulario-correccion";
 
 export default async function PaginaPedido({ params }: { params: Promise<{ id: string }> }) {
   const { supabase } = await requerirAdmin();
@@ -10,22 +13,26 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
 
   const { data: pedido } = await supabase
     .from("pedidos")
-    .select("id, comercio_id, vendedor_id, fecha, total")
+    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en, corregido_por, motivo_correccion")
     .eq("id", id)
     .maybeSingle();
 
   if (!pedido) notFound();
 
-  const [{ data: comercio }, { data: vendedor }, { data: items }] = await Promise.all([
-    supabase.from("comercios").select("codigo, nombre, localidad").eq("id", pedido.comercio_id).maybeSingle(),
-    supabase.from("usuarios").select("nombre, comision_pct").eq("id", pedido.vendedor_id).maybeSingle(),
-    supabase.from("pedido_items").select("producto_id, cantidad, precio_unitario, subtotal").eq("pedido_id", id),
-  ]);
+  const [{ data: comercio }, { data: vendedor }, { data: items }, { data: corrector }, { data: catalogo }] =
+    await Promise.all([
+      supabase.from("comercios").select("codigo, nombre, localidad").eq("id", pedido.comercio_id).maybeSingle(),
+      supabase.from("usuarios").select("nombre, comision_pct").eq("id", pedido.vendedor_id).maybeSingle(),
+      supabase.from("pedido_items").select("producto_id, cantidad, precio_unitario, subtotal").eq("pedido_id", id),
+      pedido.corregido_por
+        ? supabase.from("usuarios").select("nombre").eq("id", pedido.corregido_por).maybeSingle()
+        : Promise.resolve({ data: null }),
+      // Todo el catálogo, activo o no: un pedido viejo puede tener un
+      // producto ya dado de baja, y hay que poder seguir viendo esa línea.
+      supabase.from("productos").select("id, nombre, precio, unidad_medida, activo").order("nombre"),
+    ]);
 
-  const { data: productos } = await supabase
-    .from("productos")
-    .select("id, nombre, unidad_medida")
-    .in("id", (items ?? []).map((item) => item.producto_id));
+  const productos = catalogo ?? [];
 
   return (
     <>
@@ -52,6 +59,16 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
         ) : null}
       </div>
 
+      {pedido.corregido_en ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <span className="font-medium">
+            ✎ Corregido por {corrector?.nombre ?? "un administrador"} el{" "}
+            {formatearFechaHora(pedido.corregido_en)}.
+          </span>{" "}
+          {pedido.motivo_correccion}
+        </div>
+      ) : null}
+
       <div className={`${estilos.tarjeta} overflow-hidden`}>
         {(items ?? []).length === 0 ? (
           <EstadoVacio>Este pedido no tiene ítems.</EstadoVacio>
@@ -68,7 +85,7 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {(items ?? []).map((item) => {
-                  const producto = (productos ?? []).find((p) => p.id === item.producto_id);
+                  const producto = productos.find((p) => p.id === item.producto_id);
                   return (
                     <tr key={item.producto_id}>
                       <td className={`${estilos.celda} font-medium text-stone-900`}>
@@ -92,6 +109,29 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
         <span className="text-sm font-medium text-stone-900">Total del pedido</span>
         <span className="text-lg font-semibold text-stone-900">{formatearPrecio(pedido.total)}</span>
       </div>
+
+      <Desplegable titulo="Corregir este pedido">
+        <p className="mb-4 text-sm text-stone-500">
+          Cambiá las cantidades o el precio de lo que se cargó mal. Los productos en 0 quedan afuera
+          del pedido; el total y la comisión se recalculan solos al guardar.
+        </p>
+        <FormularioCorreccion
+          pedidoId={pedido.id}
+          accion={corregirPedido}
+          productos={productos.map((producto) => {
+            const item = (items ?? []).find((i) => i.producto_id === producto.id);
+            return {
+              id: producto.id,
+              nombre: producto.nombre,
+              unidad_medida: producto.unidad_medida,
+              activo: producto.activo,
+              precio: Number(producto.precio),
+              cantidadActual: item ? String(Number(item.cantidad)) : "",
+              precioActual: item ? String(Number(item.precio_unitario)) : String(Number(producto.precio)),
+            };
+          })}
+        />
+      </Desplegable>
     </>
   );
 }

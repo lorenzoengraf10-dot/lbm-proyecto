@@ -2,15 +2,25 @@ import Link from "next/link";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
+import { mesDesdeValor, ultimosMeses } from "@/lib/fechas";
 import { formatearFechaHora, formatearPrecio } from "@/lib/formato";
 
 export default async function PaginaPedidos({
   searchParams,
 }: {
-  searchParams: Promise<{ vendedor?: string; desde?: string; hasta?: string }>;
+  searchParams: Promise<{ vendedor?: string; desde?: string; hasta?: string; mes?: string }>;
 }) {
   const { supabase } = await requerirAdmin();
-  const { vendedor, desde, hasta } = await searchParams;
+  const { vendedor, mes } = await searchParams;
+  let { desde, hasta } = await searchParams;
+
+  // El registro mensual: elegir un mes pisa cualquier Desde/Hasta escrito a
+  // mano, para no tener dos filtros de fecha compitiendo a la vez.
+  if (mes) {
+    const rango = mesDesdeValor(mes);
+    desde = rango.desde;
+    hasta = rango.hasta;
+  }
 
   const [{ data: vendedores }, { data: comercios }] = await Promise.all([
     supabase.from("usuarios").select("id, nombre").eq("rol", "vendedor").order("nombre"),
@@ -19,7 +29,7 @@ export default async function PaginaPedidos({
 
   let consulta = supabase
     .from("pedidos")
-    .select("id, comercio_id, vendedor_id, fecha, total")
+    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en")
     .order("fecha", { ascending: false });
 
   if (vendedor) consulta = consulta.eq("vendedor_id", vendedor);
@@ -35,6 +45,8 @@ export default async function PaginaPedidos({
     (acumulado, pedido) => acumulado + Number(pedido.total),
     0
   );
+
+  const hayFiltro = Boolean(vendedor || desde || hasta || mes);
 
   return (
     <>
@@ -54,6 +66,18 @@ export default async function PaginaPedidos({
         </label>
 
         <label className="block space-y-1 text-sm">
+          <span className={estilos.etiqueta}>Mes</span>
+          <select name="mes" defaultValue={mes ?? ""} className={estilos.input}>
+            <option value="">Elegir un mes…</option>
+            {ultimosMeses(12).map((opcion) => (
+              <option key={opcion.valor} value={opcion.valor}>
+                {opcion.etiqueta}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-1 text-sm">
           <span className={estilos.etiqueta}>Desde</span>
           <input type="date" name="desde" defaultValue={desde ?? ""} className={estilos.input} />
         </label>
@@ -66,12 +90,17 @@ export default async function PaginaPedidos({
         <button type="submit" className={estilos.botonSecundario}>
           Filtrar
         </button>
-        {vendedor || desde || hasta ? (
+        {hayFiltro ? (
           <Link href="/pedidos" className="text-sm text-stone-500 underline hover:text-stone-900">
             Sacar filtros
           </Link>
         ) : null}
       </form>
+      {mes ? (
+        <p className="text-xs text-stone-500">
+          Mostrando el mes elegido: se ignoran Desde/Hasta si también están cargados.
+        </p>
+      ) : null}
 
       {error ? (
         <div className={`${estilos.tarjeta} overflow-hidden`}>
@@ -91,6 +120,11 @@ export default async function PaginaPedidos({
                 return (
                   <Link href={`/pedidos/${pedido.id}`} className="hover:underline">
                     {comercio ? `${comercio.codigo} · ${comercio.nombre}` : "—"}
+                    {pedido.corregido_en ? (
+                      <span className="ml-1.5 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 align-middle">
+                        corregido
+                      </span>
+                    ) : null}
                   </Link>
                 );
               },

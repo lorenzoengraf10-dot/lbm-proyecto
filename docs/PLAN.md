@@ -193,6 +193,14 @@ Esto no se veía en las pruebas locales porque el stub del schema `auth` daba **
 
 ### Lo que quedó sin tocar a propósito
 
-- **El admin no puede corregir ni borrar un pedido pasado el día.** Es la decisión de diseño de la sección 10 (los pedidos quedan fijos para no mover comisiones ya reportadas), pero significa que un pedido mal cargado que se detecta al día siguiente no tiene arreglo desde la app. Si en la práctica pasa, hay que decidir si el dueño puede corregirlo y cómo se deja registro de esa corrección.
 - **La visita se registra cuando el vendedor confirma**, no al escanear el QR. La sección 1 decía "siempre que escanea", pero escanear y que quede registrado sin querer (un escaneo de prueba, un QR leído dos veces) ensuciaría la cobertura. La pantalla del comercio pide confirmar con "Cargar pedido" o "Registrar visita sin pedido".
 - **`sincronizar_pedido` sigue siendo ejecutable por cualquier usuario logueado**, y el linter de Supabase lo marca. Es a propósito: el vendedor la necesita, y la función valida ella misma el rol y la pertenencia. Lo que no corresponde —y ya está cerrado— es que la pudiera llamar alguien sin sesión.
+
+## 13. El admin puede corregir un pedido viejo
+
+La sección 12 dejaba anotado que un pedido mal cargado, detectado después del día en que se hizo, no tenía arreglo desde la app (los pedidos quedan fijos a propósito, para no mover comisiones ya reportadas). El dueño pidió poder verlo por mes y corregirlo cuando haga falta, así que se agregó eso puntualmente, sin tocar la regla del mismo día para el vendedor:
+
+- **`/pedidos` tiene un selector de mes** que arma el rango de fechas solo (pisa cualquier Desde/Hasta escrito a mano): elegís "septiembre de 2026" y ves el registro completo de ese mes.
+- **El detalle del pedido tiene un "Corregir este pedido"** (colapsado, como el alta de comercios/productos) con todo el catálogo — activo o dado de baja, porque un pedido viejo puede tener un producto que ya no se vende — y un campo de cantidad y de precio por producto. El precio no se toma del catálogo de hoy: viene tal cual del formulario, para no re-cotizar en silencio el resto de los ítems si algún precio cambió desde entonces.
+- **Corregir exige un motivo** de una línea, y queda visible en el pedido ("Corregido por Lorenzo Engraf el 11/09/2026 — motivo: ...") y marcado con una etiqueta en el listado. No es un historial completo con versiones anteriores — eso sería para más adelante si hace falta — pero sí queda un rastro de que se tocó, quién y por qué.
+- Técnicamente es una función nueva (`corregir_pedido_admin`), `security definer` como `sincronizar_pedido`: es un caso especial que necesita saltarse la ventana del mismo día que exigen las RLS normales, así que valida ella misma que quien llama sea admin en vez de sumar una policy de update/delete sobre `pedido_items`. El total se recalcula solo (el trigger de siempre) y eso alcanza para que comisiones y el reporte semanal reflejen la corrección sin tocarles una línea.

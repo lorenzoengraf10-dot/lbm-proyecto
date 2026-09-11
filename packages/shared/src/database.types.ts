@@ -167,6 +167,9 @@ export type Database = {
           fecha: string;
           total: number;
           created_at: string;
+          corregido_en: string | null;
+          corregido_por: string | null;
+          motivo_correccion: string | null;
         };
         Insert: {
           id?: string;
@@ -176,6 +179,9 @@ export type Database = {
           fecha?: string;
           total?: number;
           created_at?: string;
+          corregido_en?: string | null;
+          corregido_por?: string | null;
+          motivo_correccion?: string | null;
         };
         Update: {
           id?: string;
@@ -185,6 +191,9 @@ export type Database = {
           fecha?: string;
           total?: number;
           created_at?: string;
+          corregido_en?: string | null;
+          corregido_por?: string | null;
+          motivo_correccion?: string | null;
         };
         Relationships: [
           {
@@ -204,6 +213,13 @@ export type Database = {
           {
             foreignKeyName: "pedidos_vendedor_id_fkey";
             columns: ["vendedor_id"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pedidos_corregido_por_fkey";
+            columns: ["corregido_por"];
             isOneToOne: false;
             referencedRelation: "usuarios";
             referencedColumns: ["id"];
@@ -285,6 +301,10 @@ export type Database = {
           p_pedido_id: string | null;
           p_items: Json;
         };
+        Returns: undefined;
+      };
+      corregir_pedido_admin: {
+        Args: { p_pedido_id: string; p_items: Json; p_motivo: string };
         Returns: undefined;
       };
     };
