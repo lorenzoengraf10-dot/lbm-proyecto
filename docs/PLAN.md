@@ -121,7 +121,7 @@ Cosas que se arreglaron al revisar las dos primeras etapas juntas. Las migracion
 
 ## 7. Despliegue
 
-Panel admin en Vercel (proyecto `pedido.lbm`, conectado al repo por GitHub, deploys automáticos en cada push a `main`), Root Directory `apps/admin`. Variables de entorno cargadas en el dashboard de Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`.
+Panel admin en Vercel (proyecto `pedido.lbm`, conectado al repo por GitHub, deploys automáticos en cada push a `main`), Root Directory `apps/admin`. Variables de entorno cargadas en el dashboard de Vercel, con los nombres exactos que lee `apps/admin/src/lib/env.ts`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (ahí adentro se puede pegar tanto la clave legacy como la nueva `sb_publishable_...`, son intercambiables) y `SUPABASE_SERVICE_ROLE_KEY`.
 
 Los primeros deployments daban 404 (terminaban en "Ready" a los 2 segundos, sin build real): el proyecto se había creado antes de fijar el Root Directory, así que Vercel nunca detectó Next.js y el framework quedó pisado en "Other" a nivel del deployment de producción — aunque el Project Settings del dashboard ya decía "Next.js", el deployment activo seguía usando esa config vieja. Se agregó `apps/admin/vercel.json` con `"framework": "nextjs"` explícito para que no dependa de lo que haya guardado el dashboard.
 
