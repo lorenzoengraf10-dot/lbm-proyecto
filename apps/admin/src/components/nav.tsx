@@ -10,6 +10,7 @@ const SECCIONES = [
   { href: "/pedidos", etiqueta: "Pedidos" },
   { href: "/cobertura", etiqueta: "Cobertura" },
   { href: "/comisiones", etiqueta: "Comisiones" },
+  { href: "/reportes", etiqueta: "Reporte" },
   { href: "/usuarios", etiqueta: "Usuarios" },
 ];
 
