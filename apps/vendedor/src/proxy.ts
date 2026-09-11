@@ -4,7 +4,17 @@ import { clavePublica, urlSupabase } from "./lib/env";
 
 const RUTAS_PUBLICAS = ["/login"];
 
+// El navegador pide estos dos sin sesión. Si el proxy los manda al login, el
+// service worker no llega a registrarse ("the script resource is behind a
+// redirect") y la app deja de abrir sin señal. Se chequea acá y no en el
+// matcher porque ahí las exclusiones por nombre de archivo no aplican.
+const ARCHIVOS_SIN_SESION = ["/sw.js", "/manifest.webmanifest"];
+
 export async function proxy(request: NextRequest) {
+  if (ARCHIVOS_SIN_SESION.includes(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(urlSupabase(), clavePublica(), {

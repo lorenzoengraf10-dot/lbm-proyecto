@@ -24,8 +24,8 @@ export function FormularioPedido({
   /** Para editar: cantidades ya cargadas, por id de producto. */
   cantidadesIniciales?: Record<string, string>;
   textoBoton: string;
-  /** A dónde ir después de guardar. */
-  destino: string;
+  /** A dónde ir después de guardar. Si no se pasa, la pantalla se encarga. */
+  destino?: string;
   onGuardar: (items: ItemPedido[]) => Promise<{ error: string | null }>;
 }) {
   const router = useRouter();
@@ -53,8 +53,10 @@ export function FormularioPedido({
         setError(resultado.error);
         return;
       }
-      router.push(destino);
-      router.refresh();
+      if (destino) {
+        router.push(destino);
+        router.refresh();
+      }
     });
   }
 

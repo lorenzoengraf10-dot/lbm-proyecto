@@ -3,19 +3,22 @@
 import { leerContenidoQr } from "@lbm/shared";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useDatosLocales } from "@/components/datos-locales";
 import { EscanerQr } from "@/components/escaner-qr";
 import { Mensaje } from "@/components/ui";
-import { registrarVisitaPorCodigo } from "../comercios/actions";
 
-type Estado = "listo" | "procesando" | "error";
+type Estado = "listo" | "error";
 
 export default function PaginaEscanear() {
   const router = useRouter();
+  const { comercios, elegirComercio } = useDatosLocales();
   const [estado, setEstado] = useState<Estado>("listo");
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
 
-  async function alDecodificar(texto: string) {
+  // El código se resuelve contra el catálogo guardado en el celular, así que
+  // escanear funciona igual sin señal.
+  function alDecodificar(texto: string) {
     const codigo = leerContenidoQr(texto);
     if (!codigo) {
       setError("Ese código no es de La Buena Medida.");
@@ -23,16 +26,17 @@ export default function PaginaEscanear() {
       return;
     }
 
-    setEstado("procesando");
-    const resultado = await registrarVisitaPorCodigo(codigo);
-
-    if (resultado.error || !resultado.comercioId) {
-      setError(resultado.error ?? "No se pudo registrar la visita.");
+    const comercio = comercios.find((c) => c.codigo === codigo);
+    if (!comercio) {
+      setError(
+        `El código ${codigo} no está en la cartera descargada. Si es un comercio nuevo, abrí la app con señal para actualizarla.`
+      );
       setEstado("error");
       return;
     }
 
-    router.push(`/comercios/${resultado.comercioId}?visita=${resultado.visitaId ?? ""}`);
+    elegirComercio(comercio.id);
+    router.push("/comercios");
   }
 
   return (
@@ -55,8 +59,6 @@ export default function PaginaEscanear() {
             Volver a intentar
           </button>
         </div>
-      ) : estado === "procesando" ? (
-        <p className="text-sm text-stone-500">Registrando la visita…</p>
       ) : (
         <EscanerQr key={intento} onDecodificado={alDecodificar} />
       )}

@@ -3,6 +3,7 @@ import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
 import { esDeHoy } from "@/lib/fechas";
 import { formatearFechaHora, formatearPrecio } from "@/lib/formato";
+import { PedidosPendientes } from "./pendientes";
 
 export default async function PaginaMisPedidos() {
   const { supabase, userId } = await requerirVendedor();
@@ -22,6 +23,8 @@ export default async function PaginaMisPedidos() {
       <p className="text-sm text-stone-500">
         Los de hoy se pueden corregir o anular. Los de días anteriores quedan fijos.
       </p>
+
+      <PedidosPendientes />
 
       <div className={`${estilos.tarjeta} divide-y divide-stone-100 overflow-hidden`}>
         {error ? (

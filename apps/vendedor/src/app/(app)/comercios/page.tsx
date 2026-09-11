@@ -1,71 +1,176 @@
-import Link from "next/link";
-import { EstadoVacio, estilos } from "@/components/ui";
-import { requerirVendedor } from "@/lib/auth";
+"use client";
 
-export default async function PaginaComercios({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>;
-}) {
-  const { supabase } = await requerirVendedor();
-  const { q } = await searchParams;
-  const busqueda = (q ?? "").trim().toLowerCase();
+import { useMemo, useState } from "react";
+import { FormularioPedido, type ItemPedido } from "@/components/formulario-pedido";
+import { useDatosLocales } from "@/components/datos-locales";
+import { EstadoVacio, Mensaje, estilos } from "@/components/ui";
+import { registrarPendiente } from "@/lib/sincronizacion";
 
-  const { data: comercios, error } = await supabase
-    .from("comercios")
-    .select("id, codigo, nombre, localidad")
-    .order("codigo");
+/**
+ * Lista, ficha y carga de pedido en una sola pantalla de cliente: así todo el
+ * circuito del vendedor funciona sin señal, leyendo el catálogo de IndexedDB.
+ * Si fueran rutas separadas del servidor, cada paso necesitaría red.
+ */
+export default function PaginaComercios() {
+  const { comercios, productos, cargando, hayConexion, comercioRecienEscaneado, elegirComercio, recargar } =
+    useDatosLocales();
 
-  // La cartera son unos cientos de comercios: filtrar en memoria evita armar
-  // filtros de PostgREST con texto que escribe el usuario.
-  const visibles = (comercios ?? []).filter((comercio) =>
-    busqueda
-      ? comercio.codigo.toLowerCase().includes(busqueda) ||
-        comercio.nombre.toLowerCase().includes(busqueda) ||
-        comercio.localidad.toLowerCase().includes(busqueda)
-      : true
-  );
+  const [busqueda, setBusqueda] = useState("");
+  const [seleccion, setSeleccion] = useState<{ id: string; conPedido: boolean } | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  // Si se llegó desde el escáner, ese comercio manda hasta que se elija otra
+  // cosa. Se deriva en el render en vez de copiarlo a estado con un efecto.
+  const elegido =
+    seleccion ?? (comercioRecienEscaneado ? { id: comercioRecienEscaneado, conPedido: true } : null);
+  const comercio = comercios.find((c) => c.id === elegido?.id) ?? null;
+  const cargandoPedido = elegido?.conPedido ?? false;
+
+  function volverAlListado() {
+    setSeleccion(null);
+    elegirComercio(null);
+  }
+
+  const visibles = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    if (!texto) return comercios;
+    return comercios.filter(
+      (c) =>
+        c.codigo.toLowerCase().includes(texto) ||
+        c.nombre.toLowerCase().includes(texto) ||
+        c.localidad.toLowerCase().includes(texto)
+    );
+  }, [comercios, busqueda]);
+
+  async function guardarPedido(items: ItemPedido[]): Promise<{ error: string | null }> {
+    if (!comercio) return { error: "Elegí un comercio." };
+
+    await registrarPendiente({
+      visitaId: crypto.randomUUID(),
+      comercioId: comercio.id,
+      comercioNombre: comercio.nombre,
+      fechaHora: new Date().toISOString(),
+      pedidoId: crypto.randomUUID(),
+      items: items.map((item) => ({ producto_id: item.productoId, cantidad: item.cantidad })),
+    });
+
+    await recargar();
+    volverAlListado();
+    setAviso(
+      hayConexion
+        ? "Pedido cargado."
+        : "Pedido guardado en el celular. Se sube solo cuando vuelva la señal."
+    );
+    return { error: null };
+  }
+
+  async function registrarSoloVisita() {
+    if (!comercio) return;
+    await registrarPendiente({
+      visitaId: crypto.randomUUID(),
+      comercioId: comercio.id,
+      comercioNombre: comercio.nombre,
+      fechaHora: new Date().toISOString(),
+      pedidoId: null,
+      items: [],
+    });
+    await recargar();
+    volverAlListado();
+    setAviso("Visita registrada, sin pedido.");
+  }
+
+  if (cargando) {
+    return <p className="text-sm text-stone-500">Cargando…</p>;
+  }
+
+  if (comercio) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={volverAlListado}
+          className="text-sm text-stone-500 underline"
+        >
+          ← Comercios
+        </button>
+
+        <div>
+          <h1 className="text-lg font-semibold text-stone-900">{comercio.nombre}</h1>
+          <p className="text-sm text-stone-500">
+            {comercio.codigo} · {comercio.localidad}
+          </p>
+        </div>
+
+        {cargandoPedido ? (
+          <FormularioPedido
+            productos={productos}
+            textoBoton="Confirmar pedido"
+            destino=""
+            onGuardar={guardarPedido}
+          />
+        ) : (
+          <div className={`${estilos.tarjeta} space-y-3 p-4`}>
+            <button
+              type="button"
+              onClick={() => setSeleccion({ id: comercio.id, conPedido: true })}
+              className={`w-full ${estilos.boton}`}
+            >
+              Cargar pedido
+            </button>
+            <button
+              type="button"
+              onClick={() => void registrarSoloVisita()}
+              className={`w-full ${estilos.botonSecundario}`}
+            >
+              Registrar visita sin pedido
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
       <h1 className="text-lg font-semibold text-stone-900">Comercios</h1>
 
-      <form className="flex gap-2">
-        <input
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Buscar código, nombre o localidad"
-          className={estilos.input}
-        />
-        <button type="submit" className={`${estilos.botonSecundario} shrink-0`}>
-          Buscar
-        </button>
-      </form>
+      {aviso ? <Mensaje tipo="ok">{aviso}</Mensaje> : null}
+
+      <input
+        value={busqueda}
+        onChange={(evento) => setBusqueda(evento.target.value)}
+        placeholder="Buscar código, nombre o localidad"
+        className={estilos.input}
+      />
 
       <div className={`${estilos.tarjeta} divide-y divide-stone-100 overflow-hidden`}>
-        {error ? (
-          <EstadoVacio>No se pudo cargar la cartera: {error.message}</EstadoVacio>
-        ) : visibles.length === 0 ? (
+        {visibles.length === 0 ? (
           <EstadoVacio>
-            {busqueda ? "Ningún comercio coincide con la búsqueda." : "Todavía no hay comercios."}
+            {comercios.length === 0
+              ? "Todavía no se descargó la cartera. Abrí la app una vez con señal."
+              : "Ningún comercio coincide con la búsqueda."}
           </EstadoVacio>
         ) : (
-          visibles.map((comercio) => (
-            <Link
-              key={comercio.id}
-              href={`/comercios/${comercio.id}`}
-              className="flex items-center justify-between gap-3 px-4 py-3 active:bg-stone-50"
+          visibles.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setAviso(null);
+                setSeleccion({ id: c.id, conPedido: false });
+              }}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-stone-50"
             >
-              <div>
-                <p className="font-medium text-stone-900">{comercio.nombre}</p>
+              <div className="min-w-0">
+                <p className="truncate font-medium text-stone-900">{c.nombre}</p>
                 <p className="text-sm text-stone-500">
-                  {comercio.codigo} · {comercio.localidad}
+                  {c.codigo} · {c.localidad}
                 </p>
               </div>
               <span aria-hidden className="text-stone-400">
                 ›
               </span>
-            </Link>
+            </button>
           ))
         )}
       </div>

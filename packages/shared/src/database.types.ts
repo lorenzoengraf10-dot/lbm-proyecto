@@ -277,6 +277,16 @@ export type Database = {
         Args: { p_pedido_id: string; p_items: Json };
         Returns: undefined;
       };
+      sincronizar_pedido: {
+        Args: {
+          p_visita_id: string;
+          p_comercio_id: string;
+          p_fecha_hora: string;
+          p_pedido_id: string | null;
+          p_items: Json;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       rol_usuario: "admin" | "vendedor";
