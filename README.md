@@ -10,8 +10,9 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Etapa 2 — Panel admin**: completa. Login, comercios (CRUD + importación CSV), productos (CRUD) y alta de cuentas.
 - **Etapa 3 — QR**: completa. Cartel imprimible por comercio, individual y en hoja para toda la cartera.
 - **Etapa 4 — App del vendedor**: completa. Página web (no app nativa, ver `docs/PLAN.md` sección 9): login + PIN de desbloqueo, listado de comercios con buscador, escaneo de QR, carga de pedido y último pedido del comercio como referencia.
-- **Adelanto de etapa 6**: el panel admin ya tiene **Pedidos** (listado con filtros + detalle) y **Comisiones** (total vendido y a pagar por vendedor, por rango de fechas). Ver `docs/PLAN.md` sección 10.
-- Falta el modo offline (etapa 5) y el reporte PDF semanal (resto de la etapa 6).
+- **Etapa 5 — Modo sin señal**: completa. El catálogo queda guardado en el celular y lo que el vendedor carga va a una cola local que se sube sola cuando vuelve la señal. Los identificadores se generan en el celular, así que reintentar no duplica nada.
+- **Etapa 6 — Pedidos, comisiones y reportes**: completa. El panel tiene **Pedidos** (listado con filtros + detalle), **Comisiones** (total vendido y a pagar por vendedor, por rango), **Cobertura** (hace cuánto que nadie visita cada comercio) y el **Reporte semanal** con descarga en PDF.
+- El vendedor puede además **corregir o anular** un pedido el mismo día que lo cargó; pasada esa ventana queda fijo, para no mover comisiones ya reportadas.
 
 ## Ecosistema cerrado
 
@@ -47,6 +48,11 @@ El esquema vive como migraciones versionadas en `supabase/migrations/`:
 pnpm dlx supabase link --project-ref <tu-project-ref>
 pnpm dlx supabase db push
 ```
+
+Sin terminal: `supabase/esquema-completo.sql` es todo eso junto en un archivo
+para pegar en el SQL Editor de Supabase. Lo genera `pnpm esquema` a partir de
+las migraciones — no se edita a mano, y `pnpm revisar-esquema` avisa si quedó
+viejo.
 
 En el dashboard de Supabase hay que **desactivar el registro público** (Authentication → Sign In / Providers → deshabilitar "Allow new users to sign up"). Las cuentas las crea el admin desde el panel; `supabase/config.toml` ya lo deja apagado para el entorno local.
 
@@ -119,9 +125,33 @@ docs/PLAN.md      Plan de desarrollo y decisiones tomadas
 ## Chequeos
 
 ```bash
-pnpm -r run typecheck
-pnpm --filter @lbm/admin run lint
+pnpm typecheck          # los cuatro paquetes
+pnpm lint               # las dos apps
+pnpm revisar-esquema    # esquema-completo.sql al día con las migraciones
 pnpm --filter @lbm/admin run build
-pnpm --filter @lbm/vendedor run lint
 pnpm --filter @lbm/vendedor run build
 ```
+
+## Cosas que se aprendieron a los golpes
+
+Detalles que costaron un rato de depuración y conviene no volver a pisar:
+
+- **Las columnas `numeric` de Postgres llegan como texto.** `total`, `precio`,
+  `cantidad` y `comision_pct` vuelven de la API como `"6400.00"`, no como
+  número, aunque los tipos generados digan `number`. Sumarlas con `+` sin
+  convertir concatena texto y aparece un `$ NaN` en pantalla: siempre
+  `Number(...)` antes de operar. `formatearPrecio` y `formatearCantidad` ya
+  convierten solos.
+- **`revoke ... from anon` no alcanza para cerrar una función.** El permiso de
+  anon son dos cosas distintas: el que hereda de `PUBLIC` (Postgres se lo da a
+  toda función nueva) y el explícito que agrega Supabase. Hay que revocar los
+  dos.
+- **Un `delete` bloqueado por RLS no da error**, devuelve cero filas. Si la
+  pantalla no mira cuántas filas tocó, parece que anduvo.
+- **En Vercel, el framework hay que fijarlo** (`vercel.json` con
+  `{"framework": "nextjs"}`). Si el proyecto queda en "Other" el build no
+  falla: despliega una carpeta vacía y da 404.
+- **El proxy no puede redirigir `/sw.js`.** Si lo manda al login, el service
+  worker no se registra y la app deja de abrir sin señal — sin ningún error
+  visible. Las exclusiones del `matcher` no sirven para esto; hay que cortar
+  dentro de la función.

@@ -89,8 +89,8 @@ lbm-proyecto/
 2. ✅ **Panel admin — catálogo, comercios y vendedores** — login admin, CRUD de productos (alta/edición/baja/precio), CRUD de comercios (alta/edición/baja) + pantalla de importación CSV inicial, y alta de cuentas de vendedores (no estaba explícito en el documento original, pero lo requiere el mecanismo de login ya confirmado — alguien tiene que poder crear esas cuentas desde algún lado).
 3. ✅ **Generación e impresión de QR** — QR por comercio a partir de su código, con vista previa y descarga individual (SVG) desde la ficha, y una hoja de todos los comercios activos lista para imprimir. En vez del ZIP que se había planteado, la salida en lote es esa hoja imprimible: para pegar 100 carteles conviene mandarlos a la impresora de una que bajar 100 archivos sueltos. Si igual hacen falta los archivos, agregar el ZIP es un rato.
 4. ✅ **App del vendedor — escaneo y pedido (con conexión)** — login vendedor, listado de comercios con buscador, escaneo de QR → crea Visita, catálogo interactivo → carga Pedido asociado, ver último pedido del comercio como referencia. Terminó siendo una página web (ver sección 9), no la app nativa que planteaba la sección 3 originalmente.
-5. **Modo offline** — persistencia local (SQLite) de visitas/pedidos, cola de sincronización con IDs idempotentes, reintento automático al recuperar señal, indicador de "pendiente de sincronizar".
-6. **Dashboard + Reporte PDF semanal** — dashboard admin (ventas del día/semana, ranking de productos, cobertura de visitas en tiempo real), generación de PDF semanal con selector de semana (ventas por vendedor/producto, cobertura, comisión 3%).
+5. ✅ **Modo offline** — persistencia local de visitas/pedidos, cola de sincronización con IDs idempotentes, reintento automático al recuperar señal, indicador de "pendiente de sincronizar". Sobre IndexedDB y no SQLite, porque la app terminó siendo web (sección 9).
+6. ✅ **Dashboard + Reporte PDF semanal** — portada con las ventas del día y de la semana, ranking de productos, cobertura de visitas, y PDF semanal con selector de semana (ventas por vendedor/producto, cobertura, comisión 3%). Ver secciones 10 a 12.
 
 Cada etapa es funcional de punta a punta antes de pasar a la siguiente.
 
@@ -160,3 +160,39 @@ Con la app del vendedor ya cargando pedidos de verdad, el admin pidió poder ver
 Ninguna de las dos necesitó cambios de esquema ni de RLS: `pedidos_select`/`pedido_items_select` ya le dan al admin visibilidad total desde la etapa 1.
 
 **Bug real encontrado al probar** (no cosmético — daba `$ NaN`): `pedidos.total`, `usuarios.comision_pct` y el resto de las columnas `numeric` de Postgres llegan del lado del cliente como **string** (`"6400.00"`), no como number, para no perder precisión — esto vale tanto para el mock de prueba como para Supabase real. `+` en JS concatena texto en cuanto un operando es string en vez de sumar (`0 + "6400.00"` da `"06400.00"`, no `6400`), así que sumar esas columnas con un `reduce`/`+=` sin pasarlas por `Number(...)` primero rompe en silencio y termina en `NaN`. `*` y `/` sí convierten solos, por eso no hizo falta tocar el cálculo del total del pedido en la app del vendedor (ahí la multiplicación pasa antes que cualquier suma). Regla para código futuro (el reporte PDF de la etapa 6 va a sumar exactamente estas mismas columnas): **toda columna `numeric` que se vaya a sumar con `+`/`reduce` se convierte con `Number(...)` primero** — formatearla con `Intl.NumberFormat` sola (sin sumar) es seguro tal cual, el problema es específico de `+`.
+
+## 11. Etapas 5 y 6, y la pasada de UX
+
+Cinco mejoras seguidas, en orden, sobre lo que ya funcionaba en la calle:
+
+1. **Corregir o anular un pedido el mismo día** (vendedor). Al escribirlo apareció que la policy de `pedido_items` para insertar no exigía que el pedido fuera de hoy: se podían agregar ítems a un pedido viejo. Corregido en `20260911000001_editar_pedido.sql`, junto con la función `actualizar_pedido`.
+2. **Cobertura** (admin). Vista `cobertura_comercios` con la última visita y el total de visitas por comercio, y una pantalla que los ordena por hace cuánto que nadie los visita. Como no hay ruta fija, esta es la forma de que ninguno quede en el olvido.
+3. **Modo sin señal** (etapa 5). El catálogo va a IndexedDB y todo lo que el vendedor carga pasa primero por una cola local: un solo camino para con señal y sin señal, en vez de un "modo offline" aparte que se prueba poco. Los UUID se generan en el celular y `sincronizar_pedido` es idempotente, así que reintentar cien veces la misma fila no duplica nada.
+4. **Reporte semanal en PDF** (etapa 6). `lib/reporte-semanal.ts` es la única fuente de los números, para que la pantalla y el PDF no puedan discrepar. El PDF se arma con pdf-lib (JS puro, sin binarios ni archivos de fuentes que leer del disco, así que funciona igual en la función serverless de Vercel).
+5. **Pasada de UX del panel.** El panel estaba pensado para la compu y en el celular las tablas se salían de la pantalla. El componente `Tabla` rinde una tabla de verdad en la compu y una lista de tarjetas en el celular desde la misma definición de columnas. Además: portada con los números del día en vez de un redirect a `/comercios`, barra de navegación que se arrastra de costado en el celular, y `loading.tsx` en cada sección.
+
+## 12. Correcciones de la revisión (etapas 5 y 6)
+
+Lo que apareció al revisar todo lo construido de punta a punta.
+
+**Las funciones RPC eran ejecutables sin sesión.** La migración 3 hacía `revoke execute ... from anon` y no servía; la 4, escrita para corregirla, hacía `revoke ... from public` y tampoco alcanzó. El permiso de anon sobre una función son **dos cosas distintas**: el que hereda de `PUBLIC` (Postgres se lo da de fábrica a toda función nueva) y el explícito que agrega Supabase con sus `alter default privileges`. Revocar uno deja el otro. Hay que revocar los dos.
+
+Esto no se veía en las pruebas locales porque el stub del schema `auth` daba **menos** permisos que la nube: no replicaba los `grant execute on functions` de Supabase, así que una revocación incompleta pasaba igual. La lección general: un entorno de prueba más restrictivo que el real esconde justo los agujeros que importan.
+
+**El vendedor recibía un "Pedido cargado." falso.** `registrarPendiente` no devolvía nada y `sincronizar` se tragaba el error del servidor anotándolo en la cola. Si el comercio estaba dado de baja, el repartidor se iba creyendo que el pedido había entrado. Ahora la función informa qué pasó con esa carga y la pantalla muestra el motivo. Detalle que costó una vuelta: en el camino del rechazo **no** hay que refrescar el catálogo, porque si el rechazo fue justamente porque dieron de baja el comercio, refrescarlo lo saca de la lista, desmonta la pantalla y el motivo se pierde en el momento en que hace falta leerlo.
+
+**Publicar una versión nueva rompía la app abierta.** Los pedazos de código cambian de nombre en cada publicación y los viejos dejan de existir: la siguiente pantalla fallaba con "This page couldn't load". Ahora la app detecta ese error, limpia el caché del service worker y se recarga sola una vez, con una marca en `sessionStorage` para no quedar en loop.
+
+**`on conflict (id)` no cubría `visita_id`.** `pedidos` tiene dos restricciones únicas y el `do nothing` apuntado solo cubría la clave primaria, así que un choque por `visita_id` levantaba un error de unicidad crudo en vez de no hacer nada. Sin objetivo, cubre las dos.
+
+**El `.in()` del reporte semanal no escalaba.** PostgREST manda el filtro en la URL y un id son ~37 caracteres: una semana de varios cientos de pedidos armaba una URL de decenas de kB que el servidor rechaza. Va de a tandas de 200.
+
+**`esquema-completo.sql` estaba cuatro migraciones atrás.** Es el archivo que se pega en el SQL Editor para levantar un proyecto nuevo sin terminal, y estaba escrito a mano: pegarlo dejaba la base sin la vista de cobertura ni las funciones de pedidos. Ahora lo genera `scripts/armar-esquema.mjs`, y `pnpm revisar-esquema` avisa si quedó viejo.
+
+**Cosas menores:** el PIN repetido que no coincidía volvía al primer paso sin decir nada; `formatearPrecio` no aceptaba string en la app del vendedor; `comisionPct` se leía en cada request y no lo usaba nadie.
+
+### Lo que quedó sin tocar a propósito
+
+- **El admin no puede corregir ni borrar un pedido pasado el día.** Es la decisión de diseño de la sección 10 (los pedidos quedan fijos para no mover comisiones ya reportadas), pero significa que un pedido mal cargado que se detecta al día siguiente no tiene arreglo desde la app. Si en la práctica pasa, hay que decidir si el dueño puede corregirlo y cómo se deja registro de esa corrección.
+- **La visita se registra cuando el vendedor confirma**, no al escanear el QR. La sección 1 decía "siempre que escanea", pero escanear y que quede registrado sin querer (un escaneo de prueba, un QR leído dos veces) ensuciaría la cobertura. La pantalla del comercio pide confirmar con "Cargar pedido" o "Registrar visita sin pedido".
+- **`sincronizar_pedido` sigue siendo ejecutable por cualquier usuario logueado**, y el linter de Supabase lo marca. Es a propósito: el vendedor la necesita, y la función valida ella misma el rol y la pertenencia. Lo que no corresponde —y ya está cerrado— es que la pudiera llamar alguien sin sesión.
