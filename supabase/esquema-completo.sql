@@ -6,8 +6,11 @@
 -- archivo para poder aplicarlo sin usar la terminal.
 --
 -- Se corre UNA sola vez, sobre un proyecto nuevo y vacío.
+--
+-- GENERADO por scripts/armar-esquema.mjs — no editarlo a mano:
+-- los cambios van en supabase/migrations/ y después se regenera con
+-- "pnpm esquema".
 -- ============================================================
-
 
 -- ------------------------------------------------------------
 -- 20260909000001_esquema_inicial.sql
@@ -477,3 +480,405 @@ create policy "productos_delete_admin" on public.productos
 create policy "usuarios_delete_admin" on public.usuarios
   for delete
   using (privado.rol_actual() = 'admin');
+
+
+-- ------------------------------------------------------------
+-- 20260910000003_funcion_crear_pedido.sql
+-- ------------------------------------------------------------
+
+-- Arma un pedido con sus ítems en una sola transacción: si algo falla a mitad
+-- de camino (un producto que ya no está activo, por ejemplo) no queda un
+-- pedido sin ítems dando vueltas. Pensada para llamarse desde la app del
+-- vendedor vía supabase.rpc('crear_pedido', {...}).
+--
+-- security invoker (el default, pero se deja explícito porque acá es lo que
+-- importa): corre con los permisos de quien la llama, así que los inserts de
+-- adentro pasan por las mismas RLS de siempre (pedidos_insert_vendedor,
+-- pedido_items_insert_vendedor) — a diferencia de rol_actual() y las otras
+-- funciones internas, esta SÍ está pensada para exponerse como RPC público,
+-- y no hace falta moverla al schema privado.
+--
+-- El precio de cada ítem se toma del catálogo en este mismo momento (nunca
+-- del cliente), para que quede congelado al valor real de venta.
+create or replace function public.crear_pedido(p_visita_id uuid, p_items jsonb)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_comercio_id uuid;
+  v_vendedor_id uuid;
+  v_pedido_id uuid;
+  v_item jsonb;
+  v_precio numeric;
+begin
+  if jsonb_array_length(p_items) = 0 then
+    raise exception 'El pedido necesita al menos un ítem';
+  end if;
+
+  select comercio_id, vendedor_id into v_comercio_id, v_vendedor_id
+  from visitas
+  where id = p_visita_id;
+
+  if v_comercio_id is null then
+    raise exception 'La visita % no existe', p_visita_id;
+  end if;
+
+  insert into pedidos (visita_id, comercio_id, vendedor_id)
+  values (p_visita_id, v_comercio_id, v_vendedor_id)
+  returning id into v_pedido_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    select precio into v_precio
+    from productos
+    where id = (v_item->>'producto_id')::uuid and activo;
+
+    if v_precio is null then
+      raise exception 'El producto % no existe o no está activo', v_item->>'producto_id';
+    end if;
+
+    insert into pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
+    values (v_pedido_id, (v_item->>'producto_id')::uuid, (v_item->>'cantidad')::numeric, v_precio);
+  end loop;
+
+  return v_pedido_id;
+end;
+$$;
+
+grant execute on function public.crear_pedido(uuid, jsonb) to authenticated;
+
+
+-- ------------------------------------------------------------
+-- 20260911000001_editar_pedido.sql
+-- ------------------------------------------------------------
+
+-- Ventana de edición del mismo día, parte 2.
+--
+-- pedido_items_insert_vendedor solo exigía ser el dueño del pedido, no que el
+-- pedido fuera de hoy: un vendedor podía agregarle ítems a un pedido viejo y
+-- cambiarle el total, aunque update y delete sí estuvieran cerrados. Se
+-- reemplaza por la misma condición que usan las otras dos policies.
+--
+-- Al crear un pedido nuevo esto no molesta: la fila de pedidos se inserta con
+-- fecha = now(), así que es_hoy_ar(fecha) es verdadero cuando entran sus ítems.
+drop policy "pedido_items_insert_vendedor" on public.pedido_items;
+
+create policy "pedido_items_insert_vendedor" on public.pedido_items
+  for insert
+  with check (
+    privado.rol_actual() = 'vendedor'
+    and exists (
+      select 1 from public.pedidos p
+      where p.id = pedido_items.pedido_id
+        and p.vendedor_id = auth.uid()
+        and privado.es_hoy_ar(p.fecha)
+    )
+  );
+
+-- Reemplaza los ítems de un pedido en una sola transacción, para que el
+-- vendedor pueda corregir cantidades sin que el pedido quede a medias.
+-- security invoker, igual que crear_pedido: el borrado y el alta de ítems
+-- pasan por las RLS de siempre, que son las que exigen que el pedido sea
+-- propio y del día.
+create or replace function public.actualizar_pedido(p_pedido_id uuid, p_items jsonb)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_item jsonb;
+  v_precio numeric;
+begin
+  if jsonb_array_length(p_items) = 0 then
+    raise exception 'El pedido necesita al menos un ítem';
+  end if;
+
+  delete from pedido_items where pedido_id = p_pedido_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    select precio into v_precio
+    from productos
+    where id = (v_item->>'producto_id')::uuid and activo;
+
+    if v_precio is null then
+      raise exception 'El producto % no existe o no está activo', v_item->>'producto_id';
+    end if;
+
+    -- Si el pedido es de otro día o de otro vendedor, las RLS rechazan este
+    -- insert y toda la función se deshace: no queda un pedido sin ítems.
+    insert into pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
+    values (p_pedido_id, (v_item->>'producto_id')::uuid, (v_item->>'cantidad')::numeric, v_precio);
+  end loop;
+end;
+$$;
+
+grant execute on function public.actualizar_pedido(uuid, jsonb) to authenticated;
+
+
+-- ------------------------------------------------------------
+-- 20260911000002_vista_cobertura.sql
+-- ------------------------------------------------------------
+
+-- Última visita por comercio, para la pantalla de cobertura del panel.
+--
+-- Va como vista y no como consulta en el cliente porque el panel necesita el
+-- max(fecha_hora) de cada comercio: hacerlo del lado de la app obligaría a
+-- traerse todo el historial de visitas, que crece para siempre.
+--
+-- security_invoker = true: la vista se evalúa con los permisos de quien
+-- consulta, así que siguen valiendo las RLS de comercios y visitas. Sin esto
+-- la vista correría como su dueño y sería un agujero (cualquier usuario vería
+-- las visitas de todos).
+create view public.cobertura_comercios
+with (security_invoker = true) as
+select
+  c.id,
+  c.codigo,
+  c.nombre,
+  c.localidad,
+  max(v.fecha_hora) as ultima_visita,
+  count(v.id) as visitas_totales
+from public.comercios c
+left join public.visitas v on v.comercio_id = c.id
+where c.activo
+group by c.id, c.codigo, c.nombre, c.localidad;
+
+grant select on public.cobertura_comercios to authenticated;
+
+
+-- ------------------------------------------------------------
+-- 20260911000003_sincronizacion_offline.sql
+-- ------------------------------------------------------------
+
+-- Sincronización de visitas y pedidos cargados sin conexión (etapa 5).
+--
+-- La app del vendedor genera los UUID de la visita y del pedido en el celular,
+-- antes de tener señal, y los guarda en una cola local. Esta función es la que
+-- sube esa cola: es idempotente (on conflict do nothing), así que reintentar
+-- la misma fila cien veces no duplica nada — que era el requisito del
+-- documento original para las zonas sin señal.
+--
+-- security definer, a diferencia de crear_pedido: un pedido cargado ayer sin
+-- señal ya no cumple la ventana de "mismo día" que exigen las RLS de
+-- pedido_items, así que insertarlo con los permisos del vendedor sería
+-- rechazado. La función pasa a ser la puerta de confianza y hace ella misma
+-- los controles que las RLS ya no pueden hacer:
+--   * exige rol vendedor activo (privado.rol_actual()),
+--   * fuerza vendedor_id = auth.uid(), nunca lo toma del cliente,
+--   * acota la fecha (ni futura ni de hace más de 30 días),
+--   * exige que el comercio exista y esté activo,
+--   * si el id de visita ya existe y es de otro vendedor, corta.
+--
+-- El precio de cada ítem se toma del catálogo al sincronizar, no del cliente
+-- (que podría mandar cualquier cosa). Si el admin cambió un precio entre la
+-- carga sin señal y la sincronización, el pedido queda con el precio nuevo;
+-- es el costo de no confiar en el cliente, y con la cola vaciándose apenas
+-- vuelve la señal la ventana es de horas.
+create or replace function public.sincronizar_pedido(
+  p_visita_id uuid,
+  p_comercio_id uuid,
+  p_fecha_hora timestamptz,
+  p_pedido_id uuid default null,
+  p_items jsonb default '[]'::jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_vendedor_id uuid := auth.uid();
+  v_pedido_creado uuid;
+  v_item jsonb;
+  v_precio numeric;
+begin
+  if privado.rol_actual() is distinct from 'vendedor' then
+    raise exception 'Solo un vendedor activo puede sincronizar pedidos';
+  end if;
+
+  if p_fecha_hora > now() + interval '1 hour' then
+    raise exception 'La fecha no puede estar en el futuro';
+  end if;
+
+  if p_fecha_hora < now() - interval '30 days' then
+    raise exception 'La fecha es demasiado vieja para sincronizar';
+  end if;
+
+  if not exists (select 1 from comercios where id = p_comercio_id and activo) then
+    raise exception 'El comercio no existe o está dado de baja';
+  end if;
+
+  insert into visitas (id, comercio_id, vendedor_id, fecha_hora)
+  values (p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora)
+  on conflict (id) do nothing;
+
+  if not exists (
+    select 1 from visitas
+    where id = p_visita_id and vendedor_id = v_vendedor_id and comercio_id = p_comercio_id
+  ) then
+    raise exception 'Esa visita ya existe y no es de este vendedor';
+  end if;
+
+  if p_pedido_id is null or jsonb_array_length(p_items) = 0 then
+    return;
+  end if;
+
+  insert into pedidos (id, visita_id, comercio_id, vendedor_id, fecha)
+  values (p_pedido_id, p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora)
+  on conflict (id) do nothing
+  returning id into v_pedido_creado;
+
+  -- Ya estaba sincronizado: cortar acá es lo que evita duplicar los ítems
+  -- cuando el celular reintenta una fila que en realidad ya había entrado.
+  if v_pedido_creado is null then
+    return;
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    select precio into v_precio
+    from productos
+    where id = (v_item->>'producto_id')::uuid and activo;
+
+    if v_precio is null then
+      raise exception 'El producto % no existe o no está activo', v_item->>'producto_id';
+    end if;
+
+    insert into pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
+    values (p_pedido_id, (v_item->>'producto_id')::uuid, (v_item->>'cantidad')::numeric, v_precio);
+  end loop;
+end;
+$$;
+
+revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) from anon;
+grant execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) to authenticated;
+
+
+-- ------------------------------------------------------------
+-- 20260911000004_cerrar_rpc_y_sync_idempotente.sql
+-- ------------------------------------------------------------
+
+-- Dos correcciones encontradas revisando lo construido.
+
+-- 1. Cerrar las funciones RPC al público.
+--
+-- La migración 20260911000003 hacía "revoke execute ... from anon", pero eso
+-- no sirve: Postgres le da EXECUTE a PUBLIC por defecto en toda función nueva,
+-- y anon hereda de PUBLIC. Sacarle el permiso explícito a anon lo deja igual
+-- con el permiso heredado, así que sincronizar_pedido (que es SECURITY
+-- DEFINER) seguía siendo llamable por cualquiera con la anon key, sin sesión.
+-- El linter de seguridad de Supabase lo marca como "Public Can Execute
+-- SECURITY DEFINER Function".
+--
+-- No era explotable —la función corta con excepción si privado.rol_actual()
+-- no da 'vendedor', y sin sesión auth.uid() es null—, pero un ecosistema
+-- cerrado no debería depender de eso: si mañana se agrega un camino que no
+-- valide el rol, la puerta ya está abierta.
+--
+-- Hay que revocarle a PUBLIC (eso también se lo saca a anon y a
+-- authenticated) y después devolverle el permiso solo a quien lo necesita.
+-- crear_pedido y actualizar_pedido son SECURITY INVOKER y las RLS ya las
+-- protegen, pero tampoco tienen por qué ser llamables sin sesión.
+revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) from public;
+revoke execute on function public.crear_pedido(uuid, jsonb) from public;
+revoke execute on function public.actualizar_pedido(uuid, jsonb) from public;
+
+grant execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) to authenticated, service_role;
+grant execute on function public.crear_pedido(uuid, jsonb) to authenticated, service_role;
+grant execute on function public.actualizar_pedido(uuid, jsonb) to authenticated, service_role;
+
+-- Que las funciones que se creen de acá en más no arranquen abiertas a PUBLIC.
+alter default privileges in schema public revoke execute on functions from public;
+
+-- 2. Sincronización realmente idempotente.
+--
+-- pedidos tiene DOS restricciones únicas: la clave primaria (id) y visita_id.
+-- El "on conflict (id) do nothing" solo cubría la primera, así que un choque
+-- por visita_id —el mismo pedido subido con otro id, o una fila de la cola
+-- reintentada después de que el pedido ya entrara por otro camino— levantaba
+-- una excepción de unicidad cruda en la cara del vendedor en vez de no hacer
+-- nada. Sin objetivo, el "do nothing" cubre las dos.
+create or replace function public.sincronizar_pedido(
+  p_visita_id uuid,
+  p_comercio_id uuid,
+  p_fecha_hora timestamptz,
+  p_pedido_id uuid default null,
+  p_items jsonb default '[]'::jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_vendedor_id uuid := auth.uid();
+  v_pedido_creado uuid;
+  v_item jsonb;
+  v_precio numeric;
+begin
+  if privado.rol_actual() is distinct from 'vendedor' then
+    raise exception 'Solo un vendedor activo puede sincronizar pedidos';
+  end if;
+
+  if p_fecha_hora > now() + interval '1 hour' then
+    raise exception 'La fecha no puede estar en el futuro';
+  end if;
+
+  if p_fecha_hora < now() - interval '30 days' then
+    raise exception 'La fecha es demasiado vieja para sincronizar';
+  end if;
+
+  if not exists (select 1 from comercios where id = p_comercio_id and activo) then
+    raise exception 'El comercio no existe o está dado de baja';
+  end if;
+
+  insert into visitas (id, comercio_id, vendedor_id, fecha_hora)
+  values (p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora)
+  on conflict do nothing;
+
+  if not exists (
+    select 1 from visitas
+    where id = p_visita_id and vendedor_id = v_vendedor_id and comercio_id = p_comercio_id
+  ) then
+    raise exception 'Esa visita ya existe y no es de este vendedor';
+  end if;
+
+  if p_pedido_id is null or jsonb_array_length(p_items) = 0 then
+    return;
+  end if;
+
+  insert into pedidos (id, visita_id, comercio_id, vendedor_id, fecha)
+  values (p_pedido_id, p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora)
+  on conflict do nothing
+  returning id into v_pedido_creado;
+
+  -- Ya estaba sincronizado: cortar acá es lo que evita duplicar los ítems
+  -- cuando el celular reintenta una fila que en realidad ya había entrado.
+  if v_pedido_creado is null then
+    return;
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    select precio into v_precio
+    from productos
+    where id = (v_item->>'producto_id')::uuid and activo;
+
+    if v_precio is null then
+      raise exception 'El producto % no existe o no está activo', v_item->>'producto_id';
+    end if;
+
+    insert into pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
+    values (p_pedido_id, (v_item->>'producto_id')::uuid, (v_item->>'cantidad')::numeric, v_precio);
+  end loop;
+end;
+$$;
+
+-- create or replace repone los privilegios por defecto: hay que volver a
+-- cerrarla después de redefinirla.
+revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) from public;
+grant execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb) to authenticated, service_role;

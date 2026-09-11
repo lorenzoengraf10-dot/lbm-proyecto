@@ -7,6 +7,8 @@
   },
   "scripts": {
     "typecheck": "pnpm -r --if-present run typecheck",
-    "lint": "pnpm -r --if-present run lint"
+    "lint": "pnpm -r --if-present run lint",
+    "esquema": "node scripts/armar-esquema.mjs",
+    "revisar-esquema": "node scripts/armar-esquema.mjs --revisar"
   }
 }

@@ -30,6 +30,31 @@ export interface ReporteSemanal {
   };
 }
 
+// PostgREST manda el filtro .in() en la URL: un id son ~37 caracteres, así que
+// una semana de varios cientos de pedidos armaría una URL de decenas de kB y
+// el servidor la rechazaría. Se pide de a tandas y se junta acá.
+const POR_TANDA = 200;
+
+type ItemDelReporte = { producto_id: string; cantidad: number; subtotal: number };
+
+async function itemsDeLosPedidos(
+  supabase: SesionAdmin["supabase"],
+  idsPedidos: string[]
+): Promise<ItemDelReporte[]> {
+  const tandas: string[][] = [];
+  for (let i = 0; i < idsPedidos.length; i += POR_TANDA) {
+    tandas.push(idsPedidos.slice(i, i + POR_TANDA));
+  }
+
+  const respuestas = await Promise.all(
+    tandas.map((tanda) =>
+      supabase.from("pedido_items").select("producto_id, cantidad, subtotal").in("pedido_id", tanda)
+    )
+  );
+
+  return respuestas.flatMap((respuesta) => respuesta.data ?? []);
+}
+
 /**
  * Todos los números del reporte salen de acá, así la pantalla y el PDF no
  * pueden discrepar: si el PDF calculara aparte, tarde o temprano uno de los
@@ -56,10 +81,10 @@ export async function armarReporteSemanal(
       supabase.from("productos").select("id, nombre, unidad_medida"),
     ]);
 
-  const idsPedidos = (pedidos ?? []).map((pedido) => pedido.id);
-  const { data: items } = idsPedidos.length
-    ? await supabase.from("pedido_items").select("producto_id, cantidad, subtotal").in("pedido_id", idsPedidos)
-    : { data: [] };
+  const items = await itemsDeLosPedidos(
+    supabase,
+    (pedidos ?? []).map((pedido) => pedido.id)
+  );
 
   // Number() en todas: las columnas numeric de Postgres llegan como string y
   // sumarlas con + concatenaría texto (ver docs/PLAN.md, sección 10).
@@ -86,7 +111,7 @@ export async function armarReporteSemanal(
     .filter((fila) => fila.pedidos > 0);
 
   const porProducto = new Map<string, { cantidad: number; importe: number }>();
-  for (const item of items ?? []) {
+  for (const item of items) {
     const actual = porProducto.get(item.producto_id) ?? { cantidad: 0, importe: 0 };
     actual.cantidad += Number(item.cantidad);
     actual.importe += Number(item.subtotal);

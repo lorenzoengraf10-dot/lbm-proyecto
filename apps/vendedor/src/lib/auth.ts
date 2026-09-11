@@ -5,7 +5,6 @@ import { crearClienteServidor } from "./supabase-server";
 export interface SesionVendedor {
   userId: string;
   nombre: string;
-  comisionPct: number;
   supabase: Awaited<ReturnType<typeof crearClienteServidor>>;
 }
 
@@ -37,7 +36,7 @@ export const requerirVendedor = cache(async (): Promise<SesionVendedor> => {
 
   const { data: perfil } = await supabase
     .from("usuarios")
-    .select("nombre, rol, comision_pct, activo")
+    .select("nombre, rol, activo")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -45,10 +44,5 @@ export const requerirVendedor = cache(async (): Promise<SesionVendedor> => {
     redirect("/sin-acceso");
   }
 
-  return {
-    userId: user.id,
-    nombre: perfil.nombre,
-    comisionPct: perfil.comision_pct,
-    supabase,
-  };
+  return { userId: user.id, nombre: perfil.nombre, supabase };
 });

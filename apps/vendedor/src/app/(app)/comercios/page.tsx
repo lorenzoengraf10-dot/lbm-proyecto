@@ -12,12 +12,12 @@ import { registrarPendiente } from "@/lib/sincronizacion";
  * Si fueran rutas separadas del servidor, cada paso necesitaría red.
  */
 export default function PaginaComercios() {
-  const { comercios, productos, cargando, hayConexion, comercioRecienEscaneado, elegirComercio, recargar } =
+  const { comercios, productos, cargando, comercioRecienEscaneado, elegirComercio, recargar } =
     useDatosLocales();
 
   const [busqueda, setBusqueda] = useState("");
   const [seleccion, setSeleccion] = useState<{ id: string; conPedido: boolean } | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 
   // Si se llegó desde el escáner, ese comercio manda hasta que se elija otra
   // cosa. Se deriva en el render en vez de copiarlo a estado con un efecto.
@@ -45,7 +45,7 @@ export default function PaginaComercios() {
   async function guardarPedido(items: ItemPedido[]): Promise<{ error: string | null }> {
     if (!comercio) return { error: "Elegí un comercio." };
 
-    await registrarPendiente({
+    const resultado = await registrarPendiente({
       visitaId: crypto.randomUUID(),
       comercioId: comercio.id,
       comercioNombre: comercio.nombre,
@@ -54,19 +54,32 @@ export default function PaginaComercios() {
       items: items.map((item) => ({ producto_id: item.productoId, cantidad: item.cantidad })),
     });
 
+    // Si el servidor lo rechazó, el vendedor se tiene que enterar ahora, con
+    // el comercio todavía enfrente: queda en la cola y no se pierde, pero
+    // decirle "Pedido cargado" sería mentirle.
+    //
+    // Sin recargar a propósito: si el rechazo fue porque dieron de baja el
+    // comercio, refrescar el catálogo lo saca de la lista, esta pantalla se
+    // desmonta y el motivo se pierde justo cuando hace falta leerlo.
+    if (resultado.estado === "rechazado") {
+      return { error: `No se pudo cargar: ${resultado.motivo}` };
+    }
+
     await recargar();
     volverAlListado();
-    setAviso(
-      hayConexion
-        ? "Pedido cargado."
-        : "Pedido guardado en el celular. Se sube solo cuando vuelva la señal."
-    );
+    setAviso({
+      tipo: "ok",
+      texto:
+        resultado.estado === "subido"
+          ? "Pedido cargado."
+          : "Pedido guardado en el celular. Se sube solo cuando vuelva la señal.",
+    });
     return { error: null };
   }
 
   async function registrarSoloVisita() {
     if (!comercio) return;
-    await registrarPendiente({
+    const resultado = await registrarPendiente({
       visitaId: crypto.randomUUID(),
       comercioId: comercio.id,
       comercioNombre: comercio.nombre,
@@ -76,7 +89,17 @@ export default function PaginaComercios() {
     });
     await recargar();
     volverAlListado();
-    setAviso("Visita registrada, sin pedido.");
+    if (resultado.estado === "rechazado") {
+      setAviso({ tipo: "error", texto: `No se pudo registrar la visita: ${resultado.motivo}` });
+      return;
+    }
+    setAviso({
+      tipo: "ok",
+      texto:
+        resultado.estado === "subido"
+          ? "Visita registrada, sin pedido."
+          : "Visita guardada en el celular. Se sube sola cuando vuelva la señal.",
+    });
   }
 
   if (cargando) {
@@ -134,7 +157,7 @@ export default function PaginaComercios() {
     <>
       <h1 className="text-lg font-semibold text-stone-900">Comercios</h1>
 
-      {aviso ? <Mensaje tipo="ok">{aviso}</Mensaje> : null}
+      {aviso ? <Mensaje tipo={aviso.tipo}>{aviso.texto}</Mensaje> : null}
 
       <input
         value={busqueda}

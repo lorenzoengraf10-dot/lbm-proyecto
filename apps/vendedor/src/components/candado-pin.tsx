@@ -10,8 +10,8 @@ const CLAVE_DESBLOQUEADO = "lbm_vendedor_desbloqueado";
 
 type Estado =
   | { paso: "verificando" }
-  | { paso: "elegir-pin" }
-  | { paso: "confirmar-pin"; primerPin: string; error: string | null }
+  | { paso: "elegir-pin"; error: string | null }
+  | { paso: "confirmar-pin"; primerPin: string }
   | { paso: "bloqueado"; error: string | null }
   | { paso: "desbloqueado" };
 
@@ -39,7 +39,7 @@ export function CandadoPin({ children }: { children: ReactNode }) {
     } else if (hayPinConfigurado()) {
       inicial = { paso: "bloqueado", error: null };
     } else {
-      inicial = { paso: "elegir-pin" };
+      inicial = { paso: "elegir-pin", error: null };
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEstado(inicial);
@@ -57,14 +57,16 @@ export function CandadoPin({ children }: { children: ReactNode }) {
   async function alCompletarPin(pin: string) {
     if (estado.paso === "elegir-pin") {
       setValor("");
-      setEstado({ paso: "confirmar-pin", primerPin: pin, error: null });
+      setEstado({ paso: "confirmar-pin", primerPin: pin });
       return;
     }
 
     if (estado.paso === "confirmar-pin") {
       if (pin !== estado.primerPin) {
+        // Antes volvía al primer paso sin decir nada y parecía que la app se
+        // había reiniciado sola.
         setValor("");
-        setEstado({ paso: "elegir-pin" });
+        setEstado({ paso: "elegir-pin", error: "Los dos PIN no coincidieron. Elegí uno de nuevo." });
         return;
       }
       await configurarPin(pin);

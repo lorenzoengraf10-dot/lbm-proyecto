@@ -10,27 +10,46 @@ import {
   type PendienteCola,
 } from "./almacen-local";
 
+/** Qué pasó con lo que el vendedor acaba de cargar. */
+export type ResultadoCarga =
+  | { estado: "subido" }
+  | { estado: "en-cola" }
+  | { estado: "rechazado"; motivo: string };
+
 /**
  * Todo lo que el vendedor carga pasa primero por la cola local y recién
  * después sube. Con señal la subida tarda un parpadeo; sin señal queda
  * esperando y se reintenta sola. Es un solo camino para los dos casos, en vez
  * de un "modo offline" aparte que se prueba poco y se rompe callado.
+ *
+ * Devuelve qué pasó con ESTA carga (no con toda la cola): antes avisaba
+ * "Pedido cargado" incluso cuando el servidor lo había rechazado, y el
+ * vendedor se iba del comercio creyendo que el pedido estaba.
  */
-export async function registrarPendiente(pendiente: PendienteCola): Promise<void> {
+export async function registrarPendiente(pendiente: PendienteCola): Promise<ResultadoCarga> {
   await encolar(pendiente);
-  await sincronizar();
+  const { errores } = await sincronizar();
+
+  const propio = errores.get(pendiente.visitaId);
+  if (propio) return { estado: "rechazado", motivo: propio };
+
+  const sigueEnCola = (await leerCola()).some((p) => p.visitaId === pendiente.visitaId);
+  return sigueEnCola ? { estado: "en-cola" } : { estado: "subido" };
 }
 
 export interface ResultadoSincronizacion {
   subidos: number;
   pendientes: number;
+  /** Motivo del rechazo, por visitaId, de lo que no pudo subir en esta pasada. */
+  errores: Map<string, string>;
 }
 
 export async function sincronizar(): Promise<ResultadoSincronizacion> {
   const cola = await leerCola();
-  if (cola.length === 0) return { subidos: 0, pendientes: 0 };
+  const errores = new Map<string, string>();
+  if (cola.length === 0) return { subidos: 0, pendientes: 0, errores };
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return { subidos: 0, pendientes: cola.length };
+    return { subidos: 0, pendientes: cola.length, errores };
   }
 
   const supabase = crearClienteNavegador();
@@ -54,10 +73,11 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
     // Un rechazo del servidor (comercio dado de baja, producto que ya no
     // existe, fecha vencida) no se arregla reintentando: se anota el motivo
     // y se deja en la cola para que el vendedor lo vea y avise.
+    errores.set(pendiente.visitaId, error.message);
     await encolar({ ...pendiente, error: error.message });
   }
 
-  return { subidos, pendientes: (await leerCola()).length };
+  return { subidos, pendientes: (await leerCola()).length, errores };
 }
 
 /** Refresca el catálogo guardado en el celular. Silencioso si no hay señal. */
