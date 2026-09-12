@@ -2,7 +2,13 @@
 
 import { randomInt } from "node:crypto";
 import { redirect } from "next/navigation";
-import { emailInterno, normalizarUsername, validarUsername } from "@lbm/shared";
+import {
+  derivarPassword,
+  emailInterno,
+  normalizarUsername,
+  validarPin,
+  validarUsername,
+} from "@lbm/shared";
 import { revalidatePath } from "next/cache";
 import { requerirAdmin } from "@/lib/auth";
 import {
@@ -11,6 +17,7 @@ import {
   mensajeDeError,
   type EstadoFormulario,
 } from "@/lib/formularios";
+import { claveServiceRole } from "@/lib/env";
 import { crearClienteServiceRole } from "@/lib/supabase-admin";
 import type { EstadoVendedor } from "./tipos";
 
@@ -258,4 +265,53 @@ export async function cambiarComision(
   return formularioExito(
     `Comisión actualizada a ${redondeado}%. Vale para los pedidos nuevos; los anteriores quedan como estaban.`
   );
+}
+
+/**
+ * Le pone al repartidor el PIN con el que va a entrar a la app.
+ *
+ * Lo que se guarda en Supabase Auth no es el PIN sino una contraseña derivada
+ * con HMAC del PIN + el secreto del servidor (ver derivarPassword). Así, aunque
+ * alguien conozca el endpoint de Auth, no puede probar PIN ahí: sin el secreto
+ * no sabe qué contraseña mandar. El PIN en sí no se guarda en ningún lado, ni
+ * acá ni en la base — si el repartidor se lo olvida, se le pone uno nuevo.
+ */
+export async function fijarPin(
+  _estadoPrevio: EstadoVendedor,
+  formData: FormData
+): Promise<EstadoVendedor> {
+  await requerirAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return fallo("Falta el repartidor.");
+
+  const pin = String(formData.get("pin") ?? "").trim();
+  const problema = validarPin(pin);
+  if (problema) return fallo(problema);
+
+  const admin = crearClienteServiceRole();
+
+  const { data: usuario } = await admin
+    .from("usuarios")
+    .select("username, nombre, rol")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!usuario) return fallo("No se encontró ese usuario.");
+  if (usuario.rol !== "vendedor") return fallo("El PIN es solo para los repartidores.");
+
+  const password = await derivarPassword(pin, id, claveServiceRole());
+  const { error } = await admin.auth.admin.updateUserById(id, { password });
+
+  if (error) return fallo(`No se pudo guardar el PIN: ${error.message}`);
+
+  // Un PIN nuevo borra el bloqueo por intentos fallidos: si se lo cambiaste es
+  // justamente porque no podía entrar.
+  await admin.from("intentos_pin").delete().eq("usuario_id", id);
+
+  return {
+    error: null,
+    ok: "PIN guardado.",
+    credencial: { usuario: usuario.nombre, clave: pin },
+  };
 }

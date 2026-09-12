@@ -299,3 +299,37 @@ Como consecuencia, todo lo que suma comisiones (la pantalla de Comisiones, el re
 ### El bug que apareció probando
 
 Al marcar un pedido **sin señal**, la pantalla llamaba a `router.refresh()` igual que cuando sube bien. Sin conexión eso trae la página cacheada —con el estado viejo— y encima se lleva puesto el aviso de "guardado en el celular". El repartidor veía el pedido sin cambiar y ningún mensaje: exactamente el escenario en el que hay que confiar en la app. Ahora solo se refresca cuando el cambio llegó al servidor. Es el mismo error que ya había pasado en la sección 12 con `recargar()` en la ruta de rechazo: refrescar desde el servidor pisa lo que el cliente acaba de aprender.
+
+## 18. El repartidor entra con su nombre y un PIN
+
+El dueño quería que entrar fuera un toque y unos números, en vez de escribir un usuario y una clave de diez caracteres. El problema es evidente: un PIN es un secreto chico. Con seis dígitos hay un millón de combinaciones, y si alguien puede probar sin límite, un millón se agota solo.
+
+Lo que hace que igual sea seguro son dos cosas que van juntas:
+
+**1. El PIN no es la contraseña de Supabase Auth.** Lo que se guarda en Auth es `HMAC(secreto_del_servidor, usuario + PIN)`: 64 caracteres que nadie puede armar sin el secreto. Así, aunque alguien conozca la URL del proyecto y la clave pública, no puede probar PIN contra el endpoint de Auth — no sabe qué mandar. Todo intento tiene que pasar por la app.
+
+**2. Y como pasa por la app, ahí se cuenta y se frena.** Cinco errores seguidos bloquean la cuenta quince minutos (`public.intentos_pin`). Estando bloqueada no entra ni con el PIN correcto. El dueño la destraba poniéndole un PIN nuevo desde el panel.
+
+El secreto que se usa para el HMAC es la service role key del proyecto, que ya vive solo en el servidor. **Rotarla invalida todos los PIN**: si algún día hay que cambiarla, hay que volver a fijarle el PIN a cada repartidor.
+
+### Lo que se dejó de hacer
+
+**El PIN lo pone el dueño, no el repartidor.** Se fija desde la ficha del vendedor, se muestra una sola vez para pasárselo, y no queda guardado en ningún lado — ni en la base ni en el panel. Si se lo olvida, se le pone otro. Se rechazan los obvios (`111111`, `123456`, `121212`).
+
+**Se sacó el candado de PIN local.** Antes había dos PIN: la contraseña larga para entrar y un PIN de cuatro dígitos para desbloquear la app en el celular. Ahora que entrar ya son seis números, un segundo candado encima sería exactamente lo contrario de lo que se pidió. La sesión manda, y salir es un botón.
+
+**La lista de repartidores se muestra sin haber entrado.** Es la única cosa que la app cuenta antes de autenticar: los nombres de pila del personal. En un negocio familiar de pueblo eso no es secreto, y a cambio se gana que entrar sea un toque y seis números. El celular recuerda quién es, así que a partir de la segunda vez ni siquiera hay que elegir.
+
+### Dos agujeros que aparecieron en el camino
+
+Los dos los disparó la misma pregunta del dueño: *"y por si alguien usa el mismo código, que no entren al perfil del otro"*.
+
+**El PIN no estaba atado al repartidor.** Se guardaba en el celular con una clave fija. Si Juan configuraba 1234 en un teléfono y después entraba Ana con su credencial, Juan podía poner *su* PIN y desbloquear la sesión *de Ana*. Con el login nuevo el problema desaparece de raíz: el PIN se verifica contra el servidor, contra la cuenta que se eligió.
+
+**Y lo más serio: en un celular compartido quedaban los datos del anterior.** Catálogo, nombre y —lo grave— la cola de pedidos sin subir. Esa cola se habría sincronizado con la sesión del nuevo, y como `sincronizar_pedido` fuerza `vendedor_id = auth.uid()`, los pedidos de uno habrían terminado contados, y comisionados, al otro. Ahora el celular guarda de quién son los datos y, si entra otro, borra todo lo del anterior antes de mostrar nada.
+
+### Un bug de producción que salió probando
+
+La pantalla de login quedaba **prerenderizada en el build**: la lista de repartidores se consultaba una sola vez, sin base, y la pantalla habría mostrado para siempre "todavía no hay repartidores cargados". Se arregla con `export const dynamic = "force-dynamic"`. Vale recordarlo para cualquier página que consulte datos sin sesión.
+
+Y dos del entorno de prueba, que estaban tapando fallas reales: el mock no entendía los operadores `is` ni `neq` (así que la portada del admin recibía listas vacías en silencio en vez de los pedidos por preparar y lo impago), y la base de prueba guardaba fechas absolutas, así que al día siguiente "hoy" ya no era hoy y las pruebas de visitas del día empezaban a fallar solas. Ahora `reiniciar-db.sh` corre todas las fechas el mismo tanto para que la actividad más reciente vuelva a quedar recién hecha.

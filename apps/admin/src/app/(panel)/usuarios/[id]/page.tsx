@@ -8,6 +8,7 @@ import { formatearComision, formatearPrecio } from "@/lib/formato";
 import { cambiarEstadoUsuario, eliminarUsuario } from "../actions";
 import { FormularioComision } from "../formulario-comision";
 import { FormularioCambiarPassword } from "../formulario-cambiar-password";
+import { FormularioPin } from "../formulario-pin";
 import { FormularioReset } from "../formulario-reset";
 
 function Dato({ titulo, valor, detalle }: { titulo: string; valor: string | number; detalle?: string }) {
@@ -121,16 +122,28 @@ export default async function PaginaUsuario({ params }: { params: Promise<{ id: 
             <FormularioCambiarPassword />
           </>
         ) : (
-          <>
-            <div>
-              <p className="text-sm font-medium text-stone-900">Credencial de acceso</p>
-              <p className="text-sm text-stone-500">
-                Sirve para configurar la app en un celular nuevo. Si se la olvidó o cambió de
-                teléfono, generá una nueva acá.
-              </p>
-            </div>
-            <FormularioReset id={usuario.id} nombre={usuario.nombre} />
-          </>
+          usuario.rol === "vendedor" ? (
+            <>
+              <div>
+                <p className="text-sm font-medium text-stone-900">PIN de acceso</p>
+                <p className="text-sm text-stone-500">
+                  Con esto entra a la app: elige su nombre y escribe el PIN. Si se lo olvida o se lo
+                  ve alguien, le ponés uno nuevo acá y el anterior deja de servir.
+                </p>
+              </div>
+              <FormularioPin id={usuario.id} nombre={usuario.nombre} />
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="text-sm font-medium text-stone-900">Credencial de acceso</p>
+                <p className="text-sm text-stone-500">
+                  Sirve para entrar al panel. Si se la olvidó, generá una nueva acá.
+                </p>
+              </div>
+              <FormularioReset id={usuario.id} nombre={usuario.nombre} />
+            </>
+          )
         )}
       </div>
 

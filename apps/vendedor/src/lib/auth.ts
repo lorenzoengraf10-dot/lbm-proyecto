@@ -13,9 +13,9 @@ export interface SesionVendedor {
  * página Y en cada server action: las actions son endpoints HTTP propios, así
  * que el guard del layout no alcanza para protegerlas.
  *
- * Esto es la autenticación real (Supabase Auth + rol). El PIN de
- * CandadoPin es una capa aparte, del lado del navegador, para no repetir la
- * contraseña real a cada rato — nunca reemplaza este chequeo.
+ * Esto es la autenticación real (Supabase Auth + rol). El PIN con el que el
+ * repartidor entra es lo que le da esta sesión: no hay un segundo candado
+ * encima, porque entrar ya son seis números (ver docs/PLAN.md sección 18).
  *
  * Va envuelta en cache() de React: el layout y la página la llaman por
  * separado, y sin esto cada request pagaría dos veces la validación del token

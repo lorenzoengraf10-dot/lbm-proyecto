@@ -119,6 +119,37 @@ export type Database = {
         };
         Relationships: [];
       };
+      // Solo la toca el service role: tiene RLS activada y ninguna policy, así
+      // que ni anon ni authenticated pueden leerla o escribirla.
+      intentos_pin: {
+        Row: {
+          usuario_id: string;
+          fallidos: number;
+          bloqueado_hasta: string | null;
+          actualizado_en: string;
+        };
+        Insert: {
+          usuario_id: string;
+          fallidos?: number;
+          bloqueado_hasta?: string | null;
+          actualizado_en?: string;
+        };
+        Update: {
+          usuario_id?: string;
+          fallidos?: number;
+          bloqueado_hasta?: string | null;
+          actualizado_en?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "intentos_pin_usuario_id_fkey";
+            columns: ["usuario_id"];
+            isOneToOne: true;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       visitas: {
         Row: {
           id: string;

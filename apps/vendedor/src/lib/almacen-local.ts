@@ -66,6 +66,42 @@ async function conStore<T>(
   }
 }
 
+/**
+ * Deja el celular listo para este repartidor, borrando lo del anterior si
+ * había otro.
+ *
+ * Sin esto, en un celular compartido quedaba el catálogo, el nombre y —lo
+ * grave— la cola de pedidos sin subir del repartidor anterior. Esa cola se
+ * habría sincronizado con la sesión del nuevo, y como sincronizar_pedido
+ * fuerza vendedor_id = auth.uid(), los pedidos de uno habrían terminado
+ * contados (y comisionados) al otro.
+ *
+ * Devuelve true si hubo cambio de dueño, o sea si se borró algo.
+ */
+export async function asegurarDuenio(usuarioId: string): Promise<boolean> {
+  const anterior = await conStore<string>(CATALOGO, "readonly", (s) => s.get("duenio"));
+  if (anterior === usuarioId) return false;
+
+  if (anterior) {
+    const base = await abrir();
+    try {
+      const transaccion = base.transaction([CATALOGO, COLA, COLA_ESTADOS], "readwrite");
+      transaccion.objectStore(CATALOGO).clear();
+      transaccion.objectStore(COLA).clear();
+      transaccion.objectStore(COLA_ESTADOS).clear();
+      await new Promise<void>((resolver, rechazar) => {
+        transaccion.oncomplete = () => resolver();
+        transaccion.onerror = () => rechazar(transaccion.error);
+      });
+    } finally {
+      base.close();
+    }
+  }
+
+  await conStore(CATALOGO, "readwrite", (s) => s.put(usuarioId, "duenio"));
+  return Boolean(anterior);
+}
+
 export async function guardarPerfil(nombre: string): Promise<void> {
   await conStore(CATALOGO, "readwrite", (s) => s.put(nombre, "perfil"));
 }

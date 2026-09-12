@@ -16,3 +16,10 @@ export function urlSupabase(): string {
 export function clavePublica(): string {
   return requerida("NEXT_PUBLIC_SUPABASE_ANON_KEY", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
+
+// Solo en el servidor: nunca se manda al navegador. La usa el login por PIN,
+// que necesita permisos de administrador para derivar la contraseña real y
+// para llevar la cuenta de intentos fallidos.
+export function claveServiceRole(): string {
+  return requerida("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
