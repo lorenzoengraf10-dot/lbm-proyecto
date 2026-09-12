@@ -43,7 +43,10 @@ export default async function PaginaResumen({
       supabase.from("usuarios").select("comision_pct").eq("id", userId).maybeSingle(),
       supabase
         .from("pedidos")
-        .select("id, comercio_id, total")
+        // Los ítems vienen anidados en la misma consulta: antes se pedían en
+        // una segunda vuelta, y eso obligaba al celular del repartidor a
+        // esperar dos viajes al servidor en vez de uno.
+        .select("id, comercio_id, total, pedido_items(producto_id, cantidad, subtotal)")
         .eq("vendedor_id", userId)
         .gte("fecha", mes.desde)
         .lte("fecha", `${mes.hasta}T23:59:59`),
@@ -57,20 +60,7 @@ export default async function PaginaResumen({
       supabase.from("productos").select("id, nombre, unidad_medida"),
     ]);
 
-  // PostgREST manda el .in() en la URL y un id son ~37 caracteres: un mes
-  // cargado (varios cientos de pedidos) armaría una URL de decenas de kB que
-  // el servidor rechaza. Se pide de a tandas, igual que el panel.
-  const idsPedidos = (pedidos ?? []).map((p) => p.id);
-  const tandas: string[][] = [];
-  for (let i = 0; i < idsPedidos.length; i += 200) {
-    tandas.push(idsPedidos.slice(i, i + 200));
-  }
-  const respuestas = await Promise.all(
-    tandas.map((tanda) =>
-      supabase.from("pedido_items").select("producto_id, cantidad, subtotal").in("pedido_id", tanda)
-    )
-  );
-  const items = respuestas.flatMap((respuesta) => respuesta.data ?? []);
+  const items = (pedidos ?? []).flatMap((pedido) => pedido.pedido_items ?? []);
 
   // Todas las columnas numeric llegan como string: sumarlas con + sin
   // convertir concatenaría texto en vez de sumar (ver docs/PLAN.md sección 10).

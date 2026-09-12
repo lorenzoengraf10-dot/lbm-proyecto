@@ -34,18 +34,32 @@ export default async function PaginaInicio() {
   const { desdeIso, hastaIso } = rangoDelDia(hoy);
   const semana = semanaActual();
 
-  const [{ data: pedidosHoy }, { data: visitasHoy }, { data: ultimos }, { data: comercios }, reporte] =
-    await Promise.all([
-      supabase.from("pedidos").select("total").gte("fecha", desdeIso).lt("fecha", hastaIso),
-      supabase.from("visitas").select("id").gte("fecha_hora", desdeIso).lt("fecha_hora", hastaIso),
-      supabase
-        .from("pedidos")
-        .select("id, comercio_id, vendedor_id, fecha, total")
-        .order("fecha", { ascending: false })
-        .limit(5),
-      supabase.from("cobertura_comercios").select("id, ultima_visita"),
-      armarReporteSemanal(supabase, semana),
-    ]);
+  // Todo en una sola tanda. Antes los nombres de los últimos pedidos se
+  // buscaban después, en una segunda vuelta: con la base a 120 ms eso sumaba
+  // un viaje entero de ida y vuelta a la pantalla más usada del panel. La
+  // cartera y los vendedores son pocas filas, así que sale más barato traerlos
+  // enteros de una que encadenar una consulta por ids.
+  const [
+    { data: pedidosHoy },
+    { data: visitasHoy },
+    { data: ultimos },
+    { data: comercios },
+    { data: nombresComercios },
+    { data: nombresVendedores },
+    reporte,
+  ] = await Promise.all([
+    supabase.from("pedidos").select("total").gte("fecha", desdeIso).lt("fecha", hastaIso),
+    supabase.from("visitas").select("id").gte("fecha_hora", desdeIso).lt("fecha_hora", hastaIso),
+    supabase
+      .from("pedidos")
+      .select("id, comercio_id, vendedor_id, fecha, total")
+      .order("fecha", { ascending: false })
+      .limit(5),
+    supabase.from("cobertura_comercios").select("id, ultima_visita"),
+    supabase.from("comercios").select("id, codigo, nombre"),
+    supabase.from("usuarios").select("id, nombre"),
+    armarReporteSemanal(supabase, semana),
+  ]);
 
   const facturadoHoy = (pedidosHoy ?? []).reduce(
     (total, pedido) => total + Number(pedido.total),
@@ -55,20 +69,6 @@ export default async function PaginaInicio() {
   const desatendidos = (comercios ?? []).filter(
     (comercio) => !comercio.ultima_visita || diasDesde(comercio.ultima_visita) >= DIAS_DE_ALERTA
   ).length;
-
-  // Los últimos pedidos traen ids: hay que resolverlos a nombres para que la
-  // tabla se lea. Son cinco filas, así que alcanza con buscar solo esos.
-  const idsComercios = [...new Set((ultimos ?? []).map((pedido) => pedido.comercio_id))];
-  const idsVendedores = [...new Set((ultimos ?? []).map((pedido) => pedido.vendedor_id))];
-
-  const [{ data: nombresComercios }, { data: nombresVendedores }] = await Promise.all([
-    idsComercios.length
-      ? supabase.from("comercios").select("id, codigo, nombre").in("id", idsComercios)
-      : { data: [] },
-    idsVendedores.length
-      ? supabase.from("usuarios").select("id, nombre").in("id", idsVendedores)
-      : { data: [] },
-  ]);
 
   return (
     <>

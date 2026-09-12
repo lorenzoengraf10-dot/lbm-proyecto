@@ -31,30 +31,18 @@ export interface ReporteSemanal {
   };
 }
 
-// PostgREST manda el filtro .in() en la URL: un id son ~37 caracteres, así que
-// una semana de varios cientos de pedidos armaría una URL de decenas de kB y
-// el servidor la rechazaría. Se pide de a tandas y se junta acá.
-const POR_TANDA = 200;
+// Los ítems vienen anidados dentro de cada pedido, en la misma consulta.
+// Antes se pedían aparte con un .in() de todos los ids: eso era un viaje de
+// ida y vuelta más (a 120 ms del servidor, se nota) y además armaba una URL
+// de decenas de kB cuando la semana traía muchos pedidos.
+export const ITEMS_ANIDADOS = "pedido_items(producto_id, cantidad, subtotal)";
+export const PEDIDOS_CON_ITEMS = `id, vendedor_id, total, ${ITEMS_ANIDADOS}`;
 
-type ItemDelReporte = { producto_id: string; cantidad: number; subtotal: number };
+export type ItemDelReporte = { producto_id: string; cantidad: number; subtotal: number };
 
-/** Exportado: /estadisticas hace el mismo tipo de consulta para un rango arbitrario. */
-export async function itemsDeLosPedidos(
-  supabase: SesionAdmin["supabase"],
-  idsPedidos: string[]
-): Promise<ItemDelReporte[]> {
-  const tandas: string[][] = [];
-  for (let i = 0; i < idsPedidos.length; i += POR_TANDA) {
-    tandas.push(idsPedidos.slice(i, i + POR_TANDA));
-  }
-
-  const respuestas = await Promise.all(
-    tandas.map((tanda) =>
-      supabase.from("pedido_items").select("producto_id, cantidad, subtotal").in("pedido_id", tanda)
-    )
-  );
-
-  return respuestas.flatMap((respuesta) => respuesta.data ?? []);
+/** Junta los ítems de todos los pedidos de una consulta anidada. */
+export function itemsDe(pedidos: { pedido_items?: ItemDelReporte[] }[] | null): ItemDelReporte[] {
+  return (pedidos ?? []).flatMap((pedido) => pedido.pedido_items ?? []);
 }
 
 /**
@@ -70,7 +58,7 @@ export async function armarReporteSemanal(
     await Promise.all([
       supabase
         .from("pedidos")
-        .select("id, vendedor_id, total")
+        .select(PEDIDOS_CON_ITEMS)
         .gte("fecha", semana.desdeIso)
         .lt("fecha", semana.hastaIso),
       supabase
@@ -83,10 +71,7 @@ export async function armarReporteSemanal(
       supabase.from("productos").select("id, nombre, unidad_medida"),
     ]);
 
-  const items = await itemsDeLosPedidos(
-    supabase,
-    (pedidos ?? []).map((pedido) => pedido.id)
-  );
+  const items = itemsDe(pedidos);
 
   // Number() en todas: las columnas numeric de Postgres llegan como string y
   // sumarlas con + concatenaría texto (ver docs/PLAN.md, sección 10).

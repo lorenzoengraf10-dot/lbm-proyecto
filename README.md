@@ -16,6 +16,7 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - El admin puede **ver el registro por mes y corregir cualquier pedido**, incluso viejo, desde su detalle — queda anotado quién, cuándo y por qué (`docs/PLAN.md` sección 13).
 - **Estadísticas** (admin): qué comercios compran más, qué productos se venden más y cómo viene cada vendedor, por período. El vendedor tiene su versión personal en **Resumen** (`docs/PLAN.md` sección 14).
 - **Carteles QR en PDF**: desde *Comercios → QR para imprimir*, un PDF con todos los carteles (QR + código + nombre), seis por hoja A4 en tamaño real, listo para llevar a una imprenta (`docs/PLAN.md` sección 15).
+- **Velocidad**: las dos apps se despliegan en São Paulo (`"regions": ["gru1"]`), al lado de la base, y las pantallas dejaron de encadenar consultas. El panel pasó de 4,6 s a 0,9 s para las siete pantallas principales (`docs/PLAN.md` sección 16).
 
 ## Ecosistema cerrado
 
@@ -155,6 +156,11 @@ Detalles que costaron un rato de depuración y conviene no volver a pisar:
 - **En Vercel, el framework hay que fijarlo** (`vercel.json` con
   `{"framework": "nextjs"}`). Si el proyecto queda en "Other" el build no
   falla: despliega una carpeta vacía y da 404.
+- **Y la región también.** Sin `"regions"` en el `vercel.json`, Vercel pone la
+  función en Estados Unidos. Con la base en São Paulo, cada consulta paga unos
+  120 ms de ida y vuelta; como cada pantalla hace cuatro viajes encadenados
+  (tres de ellos de autenticación), son medio segundo de puro viaje antes de
+  mostrar nada. `"regions": ["gru1"]` lo deja en unos pocos milisegundos.
 - **El proxy no puede redirigir `/sw.js`.** Si lo manda al login, el service
   worker no se registra y la app deja de abrir sin señal — sin ningún error
   visible. Las exclusiones del `matcher` no sirven para esto; hay que cortar

@@ -231,3 +231,43 @@ El dueño pidió poder bajarse todos los carteles en un PDF — con el código d
 **El `/resumen` del vendedor pedía los ítems sin tandas**, el mismo problema de URL demasiado larga que ya se había corregido en el reporte semanal: un mes cargado son varios cientos de pedidos y la lista de ids no entra en la URL. Ahora va de a 200, igual que el panel.
 
 **Una prueba estaba atada a un número fijo** de comercios de la base de prueba, así que fallaba cada vez que se cambiaban los datos. Ahora compara el catálogo con señal contra el catálogo sin señal, que es lo que en realidad se quiere probar.
+
+## 16. Velocidad
+
+El panel se sentía lento y valía la pena medir antes de tocar nada. Con el mock de la base configurado para tardar 120 ms por consulta —que es lo que cuesta un viaje de ida y vuelta entre una función en Estados Unidos y Supabase en São Paulo— salió esto:
+
+| pantalla | antes | solo el código | código + región |
+|---|---:|---:|---:|
+| portada | 872 ms | 592 ms | 247 ms |
+| pedidos | 687 ms | 686 ms | 123 ms |
+| estadísticas | 686 ms | 550 ms | 103 ms |
+| comisiones | 545 ms | 548 ms | 100 ms |
+| cobertura | 546 ms | 547 ms | 95 ms |
+| reporte semanal | 692 ms | 558 ms | 106 ms |
+| comercios | 547 ms | 549 ms | 93 ms |
+| **total** | **4575 ms** | **4030 ms** | **867 ms** |
+
+**Lo que más pesaba no era el código: era la distancia.** Ninguna de las dos apps declaraba región, así que Vercel las ponía por defecto en Estados Unidos mientras la base está en São Paulo. Cada consulta cruzaba el continente dos veces. Y como hasta la pantalla más simple hace cuatro viajes encadenados —el proxy valida el token, `requerirAdmin` lo vuelve a validar, busca el perfil, y recién ahí consulta los datos— eso solo ya son medio segundo de puro viaje. Con `"regions": ["gru1"]` en el `vercel.json` de cada app, la función corre al lado de la base y esos mismos cuatro viajes cuestan casi nada.
+
+**No se tocó la cadena de autenticación**, aunque tres de esos cuatro viajes son de autenticación. Se podría ahorrar uno confiando en la cookie en vez de validar el token contra el servidor de Auth, pero eso es exactamente lo que mantiene cerrado el ecosistema: `getUser()` pregunta, `getSession()` solo lee lo que el navegador dice. Con la región arreglada esos viajes salen unos pocos milisegundos, así que no hay nada que ganar aflojando la seguridad.
+
+Después sí quedaron cosas del código:
+
+- **La portada hacía dos vueltas encadenadas.** Traía los últimos cinco pedidos y, recién con esos ids en la mano, iba a buscar los nombres de los comercios y los vendedores. Un viaje entero de ida y vuelta en la pantalla que más se abre. Ahora la cartera y los vendedores se traen enteros en la misma tanda: son pocas filas y sale más barato que encadenar. De 47 consultas a 30, y de 872 a 592 ms.
+- **Los ítems de los pedidos se pedían aparte.** El reporte semanal, las estadísticas y el resumen del vendedor traían los pedidos y después los ítems con un `.in()` de todos los ids. Eso era un viaje de más y además armaba una URL de decenas de kB cuando el período traía muchos pedidos (el problema de la sección 15). PostgREST permite anidar la consulta: `select=id, total, pedido_items(producto_id, cantidad, subtotal)` trae todo junto, en un solo viaje, sin límite de URL. Desapareció el código de tandas.
+- **`/mis-pedidos` del vendedor hacía dos consultas independientes una atrás de la otra.** Ahora salen juntas.
+
+Y en la app del vendedor, lo que más se nota en la calle:
+
+- **El service worker ahora sirve los archivos de `/_next/static/` desde la caché sin preguntar a la red.** Llevan un hash en el nombre, así que si cambia el contenido cambia el nombre: el que está guardado sirve para siempre. Antes cada pedazo de la app esperaba a una conexión que, con media barra de señal, tarda segundos en contestar aunque el archivo ya estuviera en el celular. Van en su propia caché, con un tope de 200 archivos para que no crezca sin fin deploy tras deploy; el resto sigue yendo a la red primero, que es lo correcto para los datos.
+
+### La batería de pruebas, al día
+
+Casi todos los scripts de prueba tenían valores escritos a mano —"5 comercios", "6 pedidos", "Juan Vendedor", ids fijos— que en realidad venían de datos que se habían ido acumulando en la base de prueba de sesiones anteriores. Pasaban por costumbre, no porque el dato fuera correcto. Ahora:
+
+- La base de prueba se reconstruye desde una plantilla **antes de cada script** (`reiniciar-db.sh`), así ninguno depende de lo que dejó el anterior.
+- Lo que se espera se **calcula con SQL** en el momento (`sql.mjs`) en vez de estar escrito en el script.
+- Hay un script nuevo, `prueba-agregados.mjs`, que compara los números que muestran el reporte semanal, las estadísticas y el resumen del vendedor contra lo que dice la base. Es el que prueba de verdad que las consultas anidadas traigan lo mismo que traían las dos consultas separadas.
+- `correr-pruebas.sh` corre las dieciséis: **176 chequeos, todos en verde**.
+
+También aparecieron dos cosas del entorno de prueba, no de la app: el stub del schema `auth` borraba y recreaba roles que son del cluster (fallaba en cuanto había una segunda base), y la prueba de corrección contaba como error de consola el 400 que ella misma provoca a propósito al verificar que un vendedor no pueda corregir pedidos.

@@ -8,14 +8,17 @@ import { PedidosPendientes } from "./pendientes";
 export default async function PaginaMisPedidos() {
   const { supabase, userId } = await requerirVendedor();
 
-  const { data: pedidos, error } = await supabase
-    .from("pedidos")
-    .select("id, comercio_id, fecha, total")
-    .eq("vendedor_id", userId)
-    .order("fecha", { ascending: false })
-    .limit(50);
-
-  const { data: comercios } = await supabase.from("comercios").select("id, codigo, nombre");
+  // Las dos consultas no dependen una de la otra, así que salen juntas: en el
+  // celular, una atrás de la otra eran dos esperas en vez de una.
+  const [{ data: pedidos, error }, { data: comercios }] = await Promise.all([
+    supabase
+      .from("pedidos")
+      .select("id, comercio_id, fecha, total")
+      .eq("vendedor_id", userId)
+      .order("fecha", { ascending: false })
+      .limit(50),
+    supabase.from("comercios").select("id, codigo, nombre"),
+  ]);
 
   return (
     <>

@@ -1,5 +1,5 @@
 import type { SesionAdmin } from "./auth";
-import { itemsDeLosPedidos } from "./reporte-semanal";
+import { ITEMS_ANIDADOS, itemsDe } from "./reporte-semanal";
 
 export interface FilaRanking {
   id: string;
@@ -23,9 +23,8 @@ const TOP = 12;
  * El panel de estadísticas del admin: quién compra más, qué se vende más y
  * quién vende más, para cualquier rango de fechas. Separado de
  * reporte-semanal.ts porque ese archivo es la fuente exacta del PDF semanal
- * (no conviene tocarlo para un caso de uso distinto) — pero reutiliza
- * itemsDeLosPedidos, que ya resuelve el mismo problema de traer los ítems de
- * muchos pedidos sin pasarse del largo de URL que soporta PostgREST.
+ * (no conviene tocarlo para un caso de uso distinto) — pero comparte la forma
+ * de traer los ítems anidados dentro de cada pedido, en un solo viaje.
  */
 export async function armarEstadisticas(
   supabase: SesionAdmin["supabase"],
@@ -33,7 +32,9 @@ export async function armarEstadisticas(
   desde?: string,
   hasta?: string
 ): Promise<Estadisticas> {
-  let consultaPedidos = supabase.from("pedidos").select("id, comercio_id, vendedor_id, total");
+  let consultaPedidos = supabase
+    .from("pedidos")
+    .select(`comercio_id, vendedor_id, total, ${ITEMS_ANIDADOS}`);
   if (desde) consultaPedidos = consultaPedidos.gte("fecha", desde);
   if (hasta) consultaPedidos = consultaPedidos.lte("fecha", `${hasta}T23:59:59`);
 
@@ -45,10 +46,7 @@ export async function armarEstadisticas(
       supabase.from("usuarios").select("id, nombre").eq("rol", "vendedor"),
     ]);
 
-  const items = await itemsDeLosPedidos(
-    supabase,
-    (pedidos ?? []).map((p) => p.id)
-  );
+  const items = itemsDe(pedidos);
 
   // Number() en todas: las columnas numeric llegan como string y sumarlas con
   // + concatenaría texto en vez de sumar (ver docs/PLAN.md sección 10).
