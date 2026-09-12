@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PastillaEstado, PastillaImpago } from "@/components/estado-pedido";
 import { Tabla } from "@/components/tabla";
 import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
@@ -43,28 +44,42 @@ export default async function PaginaInicio() {
     { data: pedidosHoy },
     { data: visitasHoy },
     { data: ultimos },
+    { data: enCurso },
+    { data: impagos },
     { data: comercios },
     { data: nombresComercios },
     { data: nombresVendedores },
     reporte,
   ] = await Promise.all([
-    supabase.from("pedidos").select("total").gte("fecha", desdeIso).lt("fecha", hastaIso),
+    supabase.from("pedidos").select("total, estado").gte("fecha", desdeIso).lt("fecha", hastaIso),
     supabase.from("visitas").select("id").gte("fecha_hora", desdeIso).lt("fecha_hora", hastaIso),
     supabase
       .from("pedidos")
-      .select("id, comercio_id, vendedor_id, fecha, total")
+      .select("id, comercio_id, vendedor_id, fecha, total, estado, forma_pago, cobrado_en")
       .order("fecha", { ascending: false })
       .limit(5),
+    // Lo que está en la cola de trabajo: sin entregar, de cualquier día.
+    supabase.from("pedidos").select("id, estado").neq("estado", "completado"),
+    // Lo entregado a cuenta que todavía no se cobró.
+    supabase
+      .from("pedidos")
+      .select("total")
+      .eq("forma_pago", "cuenta_corriente")
+      .is("cobrado_en", null),
     supabase.from("cobertura_comercios").select("id, ultima_visita"),
     supabase.from("comercios").select("id, codigo, nombre"),
     supabase.from("usuarios").select("id, nombre"),
     armarReporteSemanal(supabase, semana),
   ]);
 
-  const facturadoHoy = (pedidosHoy ?? []).reduce(
-    (total, pedido) => total + Number(pedido.total),
-    0
-  );
+  // Facturado = lo entregado. Un pedido que todavía está en el mostrador no
+  // es facturación todavía; los que faltan se muestran aparte, como tarea.
+  const entregadosHoy = (pedidosHoy ?? []).filter((pedido) => pedido.estado === "completado");
+  const facturadoHoy = entregadosHoy.reduce((total, pedido) => total + Number(pedido.total), 0);
+
+  const porPreparar = (enCurso ?? []).filter((pedido) => pedido.estado === "pedido").length;
+  const porEntregar = (enCurso ?? []).filter((pedido) => pedido.estado === "preparado").length;
+  const totalImpago = (impagos ?? []).reduce((total, pedido) => total + Number(pedido.total), 0);
 
   const desatendidos = (comercios ?? []).filter(
     (comercio) => !comercio.ultima_visita || diasDesde(comercio.ultima_visita) >= DIAS_DE_ALERTA
@@ -77,11 +92,55 @@ export default async function PaginaInicio() {
         <p className="text-sm text-stone-500">Cómo viene el día y la semana.</p>
       </div>
 
+      {porPreparar > 0 || porEntregar > 0 ? (
+        <div className={`${estilos.tarjeta} space-y-3 p-5`}>
+          <p className="text-sm font-semibold text-stone-900">Para hacer</p>
+          <div className="flex flex-wrap gap-2">
+            {porPreparar > 0 ? (
+              <Link
+                href="/pedidos?estado=pedido"
+                className="rounded-lg border border-stone-200 px-4 py-2 text-sm text-stone-700 hover:bg-stone-50"
+              >
+                <span className="font-semibold text-stone-900">{porPreparar}</span>{" "}
+                {porPreparar === 1 ? "pedido por preparar" : "pedidos por preparar"} →
+              </Link>
+            ) : null}
+            {porEntregar > 0 ? (
+              <Link
+                href="/pedidos?estado=preparado"
+                className="rounded-lg border border-stone-200 px-4 py-2 text-sm text-stone-700 hover:bg-stone-50"
+              >
+                <span className="font-semibold text-stone-900">{porEntregar}</span>{" "}
+                {porEntregar === 1 ? "listo para salir" : "listos para salir"} →
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {totalImpago > 0 ? (
+        <Link
+          href="/pedidos?impagos=1"
+          className="block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100"
+        >
+          <span className="font-medium">{formatearPrecio(totalImpago)} sin cobrar</span> en pedidos
+          entregados a cuenta. Ver cuáles →
+        </Link>
+      ) : null}
+
       <div className={`${estilos.tarjeta} space-y-4 p-5`}>
         <p className="text-sm font-semibold text-stone-900">Hoy</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <Numero titulo="Pedidos" valor={(pedidosHoy ?? []).length} />
-          <Numero titulo="Facturado" valor={formatearPrecio(facturadoHoy)} />
+          <Numero
+            titulo="Facturado"
+            valor={formatearPrecio(facturadoHoy)}
+            detalle={
+              entregadosHoy.length < (pedidosHoy ?? []).length
+                ? `${entregadosHoy.length} de ${(pedidosHoy ?? []).length} entregados`
+                : undefined
+            }
+          />
           <Numero titulo="Visitas" valor={(visitasHoy ?? []).length} />
         </div>
       </div>
@@ -143,6 +202,15 @@ export default async function PaginaInicio() {
                 </Link>
               );
             },
+          },
+          {
+            encabezado: "Estado",
+            celda: (pedido) => (
+              <span className="flex flex-wrap items-center gap-1">
+                <PastillaEstado estado={pedido.estado} />
+                <PastillaImpago formaPago={pedido.forma_pago} cobradoEn={pedido.cobrado_en} />
+              </span>
+            ),
           },
           { encabezado: "Fecha", celda: (pedido) => formatearFechaHora(pedido.fecha) },
           {

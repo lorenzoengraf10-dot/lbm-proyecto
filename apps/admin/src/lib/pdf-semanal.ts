@@ -130,7 +130,7 @@ export async function pdfSemanal(semana: Semana, reporte: ReporteSemanal): Promi
         { texto: String(fila.pedidos), x: MARGEN + 240, derecha: true },
         { texto: formatearPrecio(fila.totalVendido), x: MARGEN + 380, derecha: true },
         {
-          texto: `${formatearPrecio(fila.comision)} (${formatearComision(fila.comisionPct)})`,
+          texto: `${formatearPrecio(fila.comision)} (${formatearComision(fila.comisionPct)}${fila.comisionPctVarios ? " y otro" : ""})`,
           x: derecha,
           derecha: true,
         },

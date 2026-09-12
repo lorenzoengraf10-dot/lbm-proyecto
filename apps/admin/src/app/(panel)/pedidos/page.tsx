@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ESTADOS, ETIQUETA_ESTADO, esEstado } from "@lbm/shared";
+import { PastillaEstado, PastillaImpago, TextoCobro } from "@/components/estado-pedido";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
@@ -8,10 +10,17 @@ import { formatearFechaHora, formatearPrecio } from "@/lib/formato";
 export default async function PaginaPedidos({
   searchParams,
 }: {
-  searchParams: Promise<{ vendedor?: string; desde?: string; hasta?: string; mes?: string }>;
+  searchParams: Promise<{
+    vendedor?: string;
+    desde?: string;
+    hasta?: string;
+    mes?: string;
+    estado?: string;
+    impagos?: string;
+  }>;
 }) {
   const { supabase } = await requerirAdmin();
-  const { vendedor, mes: mesPedido } = await searchParams;
+  const { vendedor, mes: mesPedido, estado: estadoPedido, impagos } = await searchParams;
   let { desde, hasta } = await searchParams;
 
   // El registro mensual: elegir un mes pisa cualquier Desde/Hasta escrito a
@@ -30,12 +39,20 @@ export default async function PaginaPedidos({
     supabase.from("comercios").select("id, codigo, nombre"),
   ]);
 
+  // Un estado inventado en la URL se ignora, como el mes: mejor mostrar todo
+  // que tumbar la pantalla.
+  const estado = esEstado(estadoPedido) ? estadoPedido : undefined;
+  const soloImpagos = impagos === "1";
+
   let consulta = supabase
     .from("pedidos")
-    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en")
+    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en, estado, forma_pago, cobrado_en")
     .order("fecha", { ascending: false });
 
   if (vendedor) consulta = consulta.eq("vendedor_id", vendedor);
+  if (estado) consulta = consulta.eq("estado", estado);
+  // Lo entregado que quedó a cuenta y todavía no se cobró.
+  if (soloImpagos) consulta = consulta.eq("forma_pago", "cuenta_corriente").is("cobrado_en", null);
   if (desde) consulta = consulta.gte("fecha", desde);
   if (hasta) consulta = consulta.lte("fecha", `${hasta}T23:59:59`);
 
@@ -49,7 +66,12 @@ export default async function PaginaPedidos({
     0
   );
 
-  const hayFiltro = Boolean(vendedor || desde || hasta || mes);
+  const hayFiltro = Boolean(vendedor || desde || hasta || mes || estado || soloImpagos);
+
+  // Lo que falta cobrar del período que se está viendo.
+  const aCobrar = (pedidos ?? [])
+    .filter((p) => p.forma_pago === "cuenta_corriente" && !p.cobrado_en)
+    .reduce((total, p) => total + Number(p.total), 0);
 
   return (
     <>
@@ -63,6 +85,18 @@ export default async function PaginaPedidos({
             {(vendedores ?? []).map((v) => (
               <option key={v.id} value={v.id}>
                 {v.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-1 text-sm">
+          <span className={estilos.etiqueta}>Estado</span>
+          <select name="estado" defaultValue={estado ?? ""} className={estilos.input}>
+            <option value="">Todos</option>
+            {ESTADOS.map((e) => (
+              <option key={e} value={e}>
+                {ETIQUETA_ESTADO[e]}
               </option>
             ))}
           </select>
@@ -99,6 +133,18 @@ export default async function PaginaPedidos({
           </Link>
         ) : null}
       </form>
+      {aCobrar > 0 && !soloImpagos ? (
+        <Link
+          href="/pedidos?impagos=1"
+          className="block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100"
+        >
+          <span className="font-medium">
+            Quedan {formatearPrecio(aCobrar)} sin cobrar
+          </span>{" "}
+          en pedidos entregados a cuenta. Ver cuáles →
+        </Link>
+      ) : null}
+
       {mes ? (
         <p className="text-xs text-stone-500">
           Mostrando el mes elegido: se ignoran Desde/Hasta si también están cargados.
@@ -131,6 +177,26 @@ export default async function PaginaPedidos({
                   </Link>
                 );
               },
+            },
+            {
+              encabezado: "Estado",
+              celda: (pedido) => (
+                <span className="flex flex-wrap items-center gap-1">
+                  <PastillaEstado estado={pedido.estado} />
+                  <PastillaImpago formaPago={pedido.forma_pago} cobradoEn={pedido.cobrado_en} />
+                </span>
+              ),
+            },
+            {
+              encabezado: "Cobro",
+              soloEscritorio: true,
+              celda: (pedido) => (
+                <TextoCobro
+                  estado={pedido.estado}
+                  formaPago={pedido.forma_pago}
+                  cobradoEn={pedido.cobrado_en}
+                />
+              ),
             },
             { encabezado: "Fecha", celda: (pedido) => formatearFechaHora(pedido.fecha) },
             {

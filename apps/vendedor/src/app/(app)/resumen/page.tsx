@@ -45,8 +45,9 @@ export default async function PaginaResumen({
         .from("pedidos")
         // Los ítems vienen anidados en la misma consulta: antes se pedían en
         // una segunda vuelta, y eso obligaba al celular del repartidor a
-        // esperar dos viajes al servidor en vez de uno.
-        .select("id, comercio_id, total, pedido_items(producto_id, cantidad, subtotal)")
+        // esperar dos viajes al servidor en vez de uno. comision_pct es el
+        // porcentaje congelado de ESTE pedido, no el que tiene hoy el vendedor.
+        .select("id, comercio_id, total, estado, comision_pct, pedido_items(producto_id, cantidad, subtotal)")
         .eq("vendedor_id", userId)
         .gte("fecha", mes.desde)
         .lte("fecha", `${mes.hasta}T23:59:59`),
@@ -62,14 +63,23 @@ export default async function PaginaResumen({
 
   const items = (pedidos ?? []).flatMap((pedido) => pedido.pedido_items ?? []);
 
+  // La comisión se gana con el pedido entregado, no con el pedido tomado.
+  const entregados = (pedidos ?? []).filter((p) => p.estado === "completado");
+  const sinEntregar = (pedidos ?? []).length - entregados.length;
+
   // Todas las columnas numeric llegan como string: sumarlas con + sin
   // convertir concatenaría texto en vez de sumar (ver docs/PLAN.md sección 10).
-  const totalVendido = (pedidos ?? []).reduce((acc, p) => acc + Number(p.total), 0);
+  const totalVendido = entregados.reduce((acc, p) => acc + Number(p.total), 0);
+  // Cada pedido con su propio porcentaje: si le cambiaron la comisión a mitad
+  // de mes, lo de antes se paga como correspondía.
+  const comisionGanada = entregados.reduce(
+    (acc, p) => acc + (Number(p.total) * Number(p.comision_pct)) / 100,
+    0
+  );
   const comisionPct = Number(perfil?.comision_pct ?? 0);
-  const comisionGanada = (totalVendido * comisionPct) / 100;
 
   const porComercio = new Map<string, { pedidos: number; total: number }>();
-  for (const pedido of pedidos ?? []) {
+  for (const pedido of entregados) {
     const actual = porComercio.get(pedido.comercio_id) ?? { pedidos: 0, total: 0 };
     actual.pedidos += 1;
     actual.total += Number(pedido.total);
@@ -115,7 +125,9 @@ export default async function PaginaResumen({
     <>
       <div>
         <h1 className="text-lg font-semibold text-stone-900">Resumen</h1>
-        <p className="text-sm text-stone-500">Cómo te fue en el mes.</p>
+        <p className="text-sm text-stone-500">
+          Cómo te fue en el mes. Cuenta los pedidos entregados.
+        </p>
       </div>
 
       <form className="flex items-end gap-2">
@@ -144,8 +156,13 @@ export default async function PaginaResumen({
           <p className="text-lg font-semibold text-stone-900">{formatearPrecio(comisionGanada)}</p>
         </div>
         <div>
-          <p className="text-xs text-stone-500">Pedidos</p>
-          <p className="text-lg font-semibold text-stone-900">{(pedidos ?? []).length}</p>
+          <p className="text-xs text-stone-500">Pedidos entregados</p>
+          <p className="text-lg font-semibold text-stone-900">{entregados.length}</p>
+          {sinEntregar > 0 ? (
+            <p className="text-xs text-stone-500">
+              {sinEntregar} sin entregar todavía
+            </p>
+          ) : null}
         </div>
         <div>
           <p className="text-xs text-stone-500">Visitas</p>

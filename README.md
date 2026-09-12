@@ -16,6 +16,8 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - El admin puede **ver el registro por mes y corregir cualquier pedido**, incluso viejo, desde su detalle — queda anotado quién, cuándo y por qué (`docs/PLAN.md` sección 13).
 - **Estadísticas** (admin): qué comercios compran más, qué productos se venden más y cómo viene cada vendedor, por período. El vendedor tiene su versión personal en **Resumen** (`docs/PLAN.md` sección 14).
 - **Carteles QR en PDF**: desde *Comercios → QR para imprimir*, un PDF con todos los carteles (QR + código + nombre), seis por hoja A4 en tamaño real, listo para llevar a una imprenta (`docs/PLAN.md` sección 15).
+- **Estados del pedido y cobro**: cada pedido va de *Pedido* a *Preparado* a *Completado*, y al completarlo se registra si se cobró en efectivo, por transferencia o quedó debiendo. Lo que queda a cuenta se ve en la portada hasta que se marca cobrado. Tanto el dueño como el repartidor pueden marcarlo, y el repartidor también sin señal (`docs/PLAN.md` sección 17).
+- **Comisión editable sin tocar el pasado**: el dueño cambia el porcentaje del repartidor desde su ficha; vale para los pedidos nuevos y los ya hechos quedan con el porcentaje que tenían, porque se congela dentro de cada pedido al crearlo. La comisión se gana con el pedido entregado.
 - **Velocidad**: las dos apps se despliegan en São Paulo (`"regions": ["gru1"]`), al lado de la base, y las pantallas dejaron de encadenar consultas. El panel pasó de 4,6 s a 0,9 s para las siete pantallas principales (`docs/PLAN.md` sección 16).
 
 ## Ecosistema cerrado

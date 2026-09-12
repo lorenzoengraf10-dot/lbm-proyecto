@@ -7,6 +7,7 @@ import { esDeHoy } from "@/lib/fechas";
 import { formatearCantidad, formatearFechaHora, formatearPrecio } from "@/lib/formato";
 import { actualizarPedido } from "../actions";
 import { BotonAnular } from "./boton-anular";
+import { PanelEstado } from "./panel-estado";
 
 export default async function PaginaMiPedido({ params }: { params: Promise<{ id: string }> }) {
   const { supabase, userId } = await requerirVendedor();
@@ -14,7 +15,7 @@ export default async function PaginaMiPedido({ params }: { params: Promise<{ id:
 
   const { data: pedido } = await supabase
     .from("pedidos")
-    .select("id, comercio_id, fecha, total")
+    .select("id, comercio_id, fecha, total, estado, forma_pago, cobrado_en, comision_pct")
     .eq("id", id)
     .eq("vendedor_id", userId)
     .maybeSingle();
@@ -46,6 +47,13 @@ export default async function PaginaMiPedido({ params }: { params: Promise<{ id:
         </h1>
         <p className="text-sm text-stone-500">{formatearFechaHora(pedido.fecha)}</p>
       </div>
+
+      <PanelEstado
+        pedidoId={pedido.id}
+        estadoInicial={pedido.estado}
+        formaPagoInicial={pedido.forma_pago}
+        cobradoEnInicial={pedido.cobrado_en}
+      />
 
       {editable ? (
         <>

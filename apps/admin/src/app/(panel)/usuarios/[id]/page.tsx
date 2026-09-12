@@ -4,26 +4,49 @@ import { BotonEliminar } from "@/components/boton-eliminar";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { formatearComision } from "@/lib/formato";
+import { formatearComision, formatearPrecio } from "@/lib/formato";
 import { cambiarEstadoUsuario, eliminarUsuario } from "../actions";
+import { FormularioComision } from "../formulario-comision";
 import { FormularioCambiarPassword } from "../formulario-cambiar-password";
 import { FormularioReset } from "../formulario-reset";
+
+function Dato({ titulo, valor, detalle }: { titulo: string; valor: string | number; detalle?: string }) {
+  return (
+    <div>
+      <p className="text-sm text-stone-500">{titulo}</p>
+      <p className="text-lg font-semibold text-stone-900">{valor}</p>
+      {detalle ? <p className="text-xs text-stone-500">{detalle}</p> : null}
+    </div>
+  );
+}
 
 export default async function PaginaUsuario({ params }: { params: Promise<{ id: string }> }) {
   const { supabase, userId } = await requerirAdmin();
   const { id } = await params;
 
-  const { data: usuario } = await supabase
-    .from("usuarios")
-    .select("id, nombre, username, rol, comision_pct, activo")
-    .eq("id", id)
-    .maybeSingle();
+  // El perfil y su actividad en la misma tanda: son consultas independientes.
+  const [{ data: usuario }, { data: pedidos }, { count: visitas }] = await Promise.all([
+    supabase.from("usuarios").select("id, nombre, username, rol, comision_pct, activo").eq("id", id).maybeSingle(),
+    supabase.from("pedidos").select("total, comision_pct, estado").eq("vendedor_id", id),
+    supabase.from("visitas").select("id", { count: "exact", head: true }).eq("vendedor_id", id),
+  ]);
 
   if (!usuario) {
     notFound();
   }
 
   const esUnoMismo = usuario.id === userId;
+
+  // La comisión sale del porcentaje congelado en cada pedido, no del que el
+  // vendedor tiene hoy: si el dueño se lo cambió, lo ya ganado no se mueve.
+  // Y solo cuentan los completados, que son los entregados y cobrados.
+  const completados = (pedidos ?? []).filter((p) => p.estado === "completado");
+  const vendido = completados.reduce((total, p) => total + Number(p.total), 0);
+  const ganado = completados.reduce(
+    (total, p) => total + (Number(p.total) * Number(p.comision_pct)) / 100,
+    0
+  );
+  const sinCompletar = (pedidos ?? []).length - completados.length;
 
   return (
     <>
@@ -46,11 +69,47 @@ export default async function PaginaUsuario({ params }: { params: Promise<{ id: 
         </p>
         {usuario.rol === "vendedor" ? (
           <p>
-            <span className="text-stone-500">Comisión: </span>
+            <span className="text-stone-500">Comisión actual: </span>
             {formatearComision(usuario.comision_pct)}
           </p>
         ) : null}
       </div>
+
+      {usuario.rol === "vendedor" ? (
+        <>
+          <div className={`${estilos.tarjeta} space-y-4 p-5`}>
+            <p className="text-sm font-semibold text-stone-900">Cómo viene</p>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <Dato titulo="Visitas" valor={visitas ?? 0} />
+              <Dato titulo="Pedidos entregados" valor={completados.length} />
+              <Dato titulo="Vendido" valor={formatearPrecio(vendido)} />
+              <Dato
+                titulo="Comisión ganada"
+                valor={formatearPrecio(ganado)}
+                detalle="con el porcentaje de cada pedido"
+              />
+            </div>
+            {sinCompletar > 0 ? (
+              <p className="text-sm text-stone-500">
+                {sinCompletar} {sinCompletar === 1 ? "pedido suyo todavía no está" : "pedidos suyos todavía no están"}{" "}
+                entregado{sinCompletar === 1 ? "" : "s"}: no cuenta{sinCompletar === 1 ? "" : "n"} para la comisión.
+              </p>
+            ) : null}
+          </div>
+
+          <div className={`${estilos.tarjeta} space-y-3 p-5`}>
+            <div>
+              <p className="text-sm font-medium text-stone-900">Cambiar la comisión</p>
+              <p className="text-sm text-stone-500">
+                El porcentaje nuevo se aplica a los pedidos que {usuario.nombre} cargue de acá en
+                adelante. Los pedidos que ya hizo quedan con el porcentaje que tenían, así no se
+                mueven las comisiones ya pagadas ni los reportes viejos.
+              </p>
+            </div>
+            <FormularioComision id={usuario.id} valorActual={Number(usuario.comision_pct)} />
+          </div>
+        </>
+      ) : null}
 
       <div className={`${estilos.tarjeta} space-y-3 p-5`}>
         {esUnoMismo ? (

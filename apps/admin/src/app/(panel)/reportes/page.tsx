@@ -79,7 +79,7 @@ export default async function PaginaReportes({
           {
             encabezado: "Comisión",
             celda: (fila) =>
-              `${formatearPrecio(fila.comision)} (${formatearComision(fila.comisionPct)})`,
+              `${formatearPrecio(fila.comision)} (${formatearComision(fila.comisionPct)}${fila.comisionPctVarios ? " y otro" : ""})`,
           },
         ]}
       />

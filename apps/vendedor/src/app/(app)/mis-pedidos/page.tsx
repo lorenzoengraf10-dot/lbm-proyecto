@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ETIQUETA_ESTADO, estaImpago } from "@lbm/shared";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
 import { esDeHoy } from "@/lib/fechas";
@@ -13,7 +14,7 @@ export default async function PaginaMisPedidos() {
   const [{ data: pedidos, error }, { data: comercios }] = await Promise.all([
     supabase
       .from("pedidos")
-      .select("id, comercio_id, fecha, total")
+      .select("id, comercio_id, fecha, total, estado, forma_pago, cobrado_en")
       .eq("vendedor_id", userId)
       .order("fecha", { ascending: false })
       .limit(50),
@@ -47,6 +48,10 @@ export default async function PaginaMisPedidos() {
                 <div className="min-w-0">
                   <p className="truncate font-medium text-stone-900">
                     {comercio ? comercio.nombre : "Comercio eliminado"}
+                  </p>
+                  <p className="text-sm text-stone-500">
+                    {ETIQUETA_ESTADO[pedido.estado]}
+                    {estaImpago(pedido.forma_pago, pedido.cobrado_en) ? " · sin cobrar" : ""}
                   </p>
                   <p className="text-sm text-stone-500">
                     {formatearFechaHora(pedido.fecha)}

@@ -271,3 +271,31 @@ Casi todos los scripts de prueba tenían valores escritos a mano —"5 comercios
 - `correr-pruebas.sh` corre las dieciséis: **176 chequeos, todos en verde**.
 
 También aparecieron dos cosas del entorno de prueba, no de la app: el stub del schema `auth` borraba y recreaba roles que son del cluster (fallaba en cuanto había una segunda base), y la prueba de corrección contaba como error de consola el 400 que ella misma provoca a propósito al verificar que un vendedor no pueda corregir pedidos.
+
+## 17. Estados del pedido, cobro y comisión que no reescribe el pasado
+
+Dos pedidos del dueño que terminaron siendo el mismo problema.
+
+**El pedido ahora pasa por tres estados**: `pedido` (tomado en el comercio) → `preparado` (armado en el local) → `completado` (entregado). Al completarlo hay que decir cómo se cobró: efectivo, transferencia o **queda debiendo**, que es la cuenta corriente de toda la vida — la mercadería sale y se cobra después. Un pedido a cuenta queda marcado "sin cobrar" hasta que alguien toca *Marcar como cobrado*, y tanto la portada como la lista de pedidos avisan cuánta plata hay dando vueltas.
+
+Los dos, el dueño y el repartidor, pueden mover cualquier estado. Para el repartidor eso significa que tiene que andar **sin señal**: los cambios van a una cola propia en el celular, igual que los pedidos, y suben solos cuando vuelve la conexión. La cola de estados se sincroniza *después* de la de pedidos, a propósito: si cargó el pedido y lo entregó todo sin señal, el pedido tiene que existir en la base antes de que se le pueda cambiar el estado. Si aun así no llegó, el cambio espera a la próxima pasada.
+
+**La comisión se congela en el pedido.** Esto es lo que obligó a tocar el modelo. Hasta ahora se calculaba en vivo: total del pedido × porcentaje que tuviera el vendedor *en ese momento*. Con eso, subirle la comisión al repartidor de 3% a 5% reescribía todo el historial — un reporte semanal de hace un mes pasaba a mostrar otro número, y una comisión ya pagada dejaba de coincidir con lo que decía el sistema.
+
+La solución es la que el proyecto ya usaba para los precios (`pedido_items.precio_unitario`): guardar el valor dentro del pedido cuando se crea. `pedidos.comision_pct` se completa al insertar, y de ahí en más nadie lo toca. El dueño cambia el porcentaje desde la ficha del vendedor y el cambio vale para los pedidos que vengan; los anteriores quedan exactamente como estaban.
+
+El porcentaje lo pone un **trigger**, no solo las funciones: si algún día un pedido entra por otro camino —una carga a mano, un script, una función nueva— igual queda congelado. Es el mismo patrón que `trg_set_comision_pct_default` sobre usuarios, un escalón más abajo.
+
+Como consecuencia, todo lo que suma comisiones (la pantalla de Comisiones, el reporte semanal, el Resumen del vendedor y la ficha del repartidor) pasó a sumar **pedido por pedido con su propio porcentaje** en vez de multiplicar un total por un número. Un período que cruza un cambio de comisión suma bien las dos mitades, y la pantalla muestra "3% y 5%" en vez de un número que no explicaría el total.
+
+**La comisión ahora se gana con el pedido entregado**, no con el pedido tomado: Comisiones y el reporte semanal cuentan solo los completados. Estadísticas sigue contando todos los pedidos, porque ahí la pregunta es comercial ("qué cliente compra más"), no cuánta plata hay que pagar; cada pantalla dice qué cuenta.
+
+### Decisiones que vale la pena recordar
+
+- **Mover el estado no se hizo con una policy de update sobre `pedidos`.** Eso le habría dado al vendedor permiso para tocar también el total o la fecha. Es una función `security definer` que solo mueve las columnas del estado y del cobro, y hace ella misma el control: el admin cualquier pedido, el vendedor solo los suyos. Las RLS de pedidos siguen cerradas a la ventana del mismo día, que es para editar ítems — otra cosa.
+- **Los pedidos que ya existían se dieron por completados** en la migración. Si hubieran quedado en `pedido` habrían desaparecido de las comisiones, que ahora cuentan solo los entregados. La forma de pago les queda en null y la pantalla lo dice —"sin registrar"— en vez de inventar un efectivo que nadie confirmó.
+- **Volver atrás un estado limpia el cobro**, porque el pedido deja de estar entregado. El botón lo avisa antes de hacerlo.
+
+### El bug que apareció probando
+
+Al marcar un pedido **sin señal**, la pantalla llamaba a `router.refresh()` igual que cuando sube bien. Sin conexión eso trae la página cacheada —con el estado viejo— y encima se lleva puesto el aviso de "guardado en el celular". El repartidor veía el pedido sin cambiar y ningún mensaje: exactamente el escenario en el que hay que confiar en la app. Ahora solo se refresca cuando el cambio llegó al servidor. Es el mismo error que ya había pasado en la sección 12 con `recargar()` en la ruta de rechazo: refrescar desde el servidor pisa lo que el cliente acaba de aprender.

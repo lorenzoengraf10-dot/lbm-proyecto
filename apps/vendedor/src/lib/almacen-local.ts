@@ -1,6 +1,6 @@
 "use client";
 
-import type { Tabla } from "@lbm/shared";
+import type { EstadoPedido, FormaPago, Tabla } from "@lbm/shared";
 
 // Guarda en el celular lo necesario para trabajar sin señal: el catálogo
 // (comercios y productos) para poder buscar y armar el pedido, y una cola de
@@ -8,9 +8,10 @@ import type { Tabla } from "@lbm/shared";
 // puede ser una cartera de cientos de comercios y una cola de varios días.
 
 const NOMBRE_BASE = "lbm-vendedor";
-const VERSION = 1;
+const VERSION = 2;
 const CATALOGO = "catalogo";
 const COLA = "cola";
+const COLA_ESTADOS = "cola-estados";
 
 export type ComercioLocal = Pick<Tabla<"comercios">, "id" | "codigo" | "nombre" | "localidad">;
 export type ProductoLocal = Pick<Tabla<"productos">, "id" | "nombre" | "precio" | "unidad_medida">;
@@ -34,6 +35,11 @@ function abrir(): Promise<IDBDatabase> {
       const base = solicitud.result;
       if (!base.objectStoreNames.contains(CATALOGO)) base.createObjectStore(CATALOGO);
       if (!base.objectStoreNames.contains(COLA)) base.createObjectStore(COLA, { keyPath: "visitaId" });
+      // Versión 2: los cambios de estado (preparado/entregado y cómo se cobró)
+      // también tienen que poder hacerse sin señal.
+      if (!base.objectStoreNames.contains(COLA_ESTADOS)) {
+        base.createObjectStore(COLA_ESTADOS, { keyPath: "pedidoId" });
+      }
     };
     solicitud.onsuccess = () => resolver(solicitud.result);
     solicitud.onerror = () => rechazar(solicitud.error);
@@ -105,4 +111,33 @@ export async function leerCola(): Promise<PendienteCola[]> {
 
 export async function quitarDeCola(visitaId: string): Promise<void> {
   await conStore(COLA, "readwrite", (s) => s.delete(visitaId));
+}
+
+/**
+ * Un cambio de estado esperando a subir. La clave es el pedido, así que si el
+ * vendedor lo marca preparado y después entregado sin señal, queda solo el
+ * último — que es justo lo que hay que mandar. Y mandar dos veces el mismo
+ * cambio da el mismo resultado, así que reintentar nunca rompe nada.
+ */
+export interface CambioEstadoPendiente {
+  pedidoId: string;
+  estado: EstadoPedido;
+  formaPago: FormaPago | null;
+  /** true = marcar cobrado un pedido que había quedado a cuenta. */
+  cobrar?: boolean;
+  error?: string;
+}
+
+export async function encolarEstado(cambio: CambioEstadoPendiente): Promise<void> {
+  await conStore(COLA_ESTADOS, "readwrite", (s) => s.put(cambio));
+}
+
+export async function leerColaEstados(): Promise<CambioEstadoPendiente[]> {
+  return (
+    (await conStore<CambioEstadoPendiente[]>(COLA_ESTADOS, "readonly", (s) => s.getAll())) ?? []
+  );
+}
+
+export async function quitarEstadoDeCola(pedidoId: string): Promise<void> {
+  await conStore(COLA_ESTADOS, "readwrite", (s) => s.delete(pedidoId));
 }

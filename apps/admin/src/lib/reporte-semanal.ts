@@ -7,6 +7,8 @@ export interface FilaVendedor {
   pedidos: number;
   totalVendido: number;
   comisionPct: number;
+  /** Hubo más de un porcentaje en la semana (le cambiaron la comisión a mitad de camino). */
+  comisionPctVarios: boolean;
   comision: number;
 }
 
@@ -36,7 +38,10 @@ export interface ReporteSemanal {
 // ida y vuelta más (a 120 ms del servidor, se nota) y además armaba una URL
 // de decenas de kB cuando la semana traía muchos pedidos.
 export const ITEMS_ANIDADOS = "pedido_items(producto_id, cantidad, subtotal)";
-export const PEDIDOS_CON_ITEMS = `id, vendedor_id, total, ${ITEMS_ANIDADOS}`;
+// comision_pct viene del pedido, no del vendedor: es el porcentaje congelado
+// cuando se cargó, así el reporte de una semana vieja sigue dando lo mismo
+// aunque después le hayan cambiado la comisión al repartidor.
+export const PEDIDOS_CON_ITEMS = `id, vendedor_id, total, comision_pct, ${ITEMS_ANIDADOS}`;
 
 export type ItemDelReporte = { producto_id: string; cantidad: number; subtotal: number };
 
@@ -56,9 +61,12 @@ export async function armarReporteSemanal(
 ): Promise<ReporteSemanal> {
   const [{ data: pedidos }, { data: visitas }, { data: vendedores }, { data: comercios }, { data: productos }] =
     await Promise.all([
+      // Solo los entregados: la comisión de la semana es lo que hay que pagar,
+      // y un pedido que todavía no salió del local no se paga.
       supabase
         .from("pedidos")
         .select(PEDIDOS_CON_ITEMS)
+        .eq("estado", "completado")
         .gte("fecha", semana.desdeIso)
         .lt("fecha", semana.hastaIso),
       supabase
@@ -75,24 +83,39 @@ export async function armarReporteSemanal(
 
   // Number() en todas: las columnas numeric de Postgres llegan como string y
   // sumarlas con + concatenaría texto (ver docs/PLAN.md, sección 10).
-  const porVendedor = new Map<string, { pedidos: number; total: number }>();
+  const porVendedor = new Map<
+    string,
+    { pedidos: number; total: number; comision: number; porcentajes: Set<number> }
+  >();
   for (const pedido of pedidos ?? []) {
-    const actual = porVendedor.get(pedido.vendedor_id) ?? { pedidos: 0, total: 0 };
+    const actual = porVendedor.get(pedido.vendedor_id) ?? {
+      pedidos: 0,
+      total: 0,
+      comision: 0,
+      porcentajes: new Set<number>(),
+    };
+    const total = Number(pedido.total);
+    const pct = Number(pedido.comision_pct);
     actual.pedidos += 1;
-    actual.total += Number(pedido.total);
+    actual.total += total;
+    // Uno por uno con su propio porcentaje: si el cambio de comisión cayó a
+    // mitad de semana, cada pedido se paga como correspondía ese día.
+    actual.comision += (total * pct) / 100;
+    actual.porcentajes.add(pct);
     porVendedor.set(pedido.vendedor_id, actual);
   }
 
   const filasVendedores: FilaVendedor[] = (vendedores ?? [])
     .map((vendedor) => {
-      const resumen = porVendedor.get(vendedor.id) ?? { pedidos: 0, total: 0 };
-      const comisionPct = Number(vendedor.comision_pct);
+      const resumen = porVendedor.get(vendedor.id);
+      const porcentajes = [...(resumen?.porcentajes ?? [])].sort((a, b) => a - b);
       return {
         nombre: vendedor.nombre,
-        pedidos: resumen.pedidos,
-        totalVendido: resumen.total,
-        comisionPct,
-        comision: (resumen.total * comisionPct) / 100,
+        pedidos: resumen?.pedidos ?? 0,
+        totalVendido: resumen?.total ?? 0,
+        comisionPct: porcentajes.length > 0 ? porcentajes[0] : Number(vendedor.comision_pct),
+        comisionPctVarios: porcentajes.length > 1,
+        comision: resumen?.comision ?? 0,
       };
     })
     .filter((fila) => fila.pedidos > 0);

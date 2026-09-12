@@ -15,7 +15,14 @@ export default async function PaginaComisiones({
   const [{ data: vendedores }, consultaPedidos] = await Promise.all([
     supabase.from("usuarios").select("id, nombre, comision_pct, activo").eq("rol", "vendedor").order("nombre"),
     (() => {
-      let consulta = supabase.from("pedidos").select("vendedor_id, total");
+      // Solo los completados: la comisión se gana cuando el pedido se entregó
+      // y se cobró, no cuando se tomó. Y se trae comision_pct del PEDIDO, que
+      // es el porcentaje congelado al crearlo — si el dueño se lo cambió al
+      // vendedor, lo ya ganado no se mueve.
+      let consulta = supabase
+        .from("pedidos")
+        .select("vendedor_id, total, comision_pct")
+        .eq("estado", "completado");
       if (desde) consulta = consulta.gte("fecha", desde);
       if (hasta) consulta = consulta.lte("fecha", `${hasta}T23:59:59`);
       return consulta;
@@ -27,20 +34,43 @@ export default async function PaginaComisiones({
   // pedidos.total es numeric(10,2): PostgREST lo manda como string ("6400.00")
   // para no perder precisión. Sumarlo con + sin convertir concatenaría texto
   // en vez de sumar números.
-  const porVendedor = new Map<string, { cantidad: number; totalVendido: number }>();
+  const porVendedor = new Map<
+    string,
+    { cantidad: number; totalVendido: number; comision: number; porcentajes: Set<number> }
+  >();
   for (const pedido of pedidos ?? []) {
-    const actual = porVendedor.get(pedido.vendedor_id) ?? { cantidad: 0, totalVendido: 0 };
+    const actual = porVendedor.get(pedido.vendedor_id) ?? {
+      cantidad: 0,
+      totalVendido: 0,
+      comision: 0,
+      porcentajes: new Set<number>(),
+    };
+    const total = Number(pedido.total);
+    const pct = Number(pedido.comision_pct);
     actual.cantidad += 1;
-    actual.totalVendido += Number(pedido.total);
+    actual.totalVendido += total;
+    // Pedido por pedido, cada uno con su porcentaje: un período que cruza un
+    // cambio de comisión suma bien las dos mitades.
+    actual.comision += (total * pct) / 100;
+    actual.porcentajes.add(pct);
     porVendedor.set(pedido.vendedor_id, actual);
   }
 
   const filas = (vendedores ?? []).map((v) => {
-    const resumen = porVendedor.get(v.id) ?? { cantidad: 0, totalVendido: 0 };
+    const resumen = porVendedor.get(v.id) ?? {
+      cantidad: 0,
+      totalVendido: 0,
+      comision: 0,
+      porcentajes: new Set<number>(),
+    };
+    const porcentajes = [...resumen.porcentajes].sort((a, b) => a - b);
     return {
       ...v,
-      ...resumen,
-      comision: (resumen.totalVendido * Number(v.comision_pct)) / 100,
+      cantidad: resumen.cantidad,
+      totalVendido: resumen.totalVendido,
+      comision: resumen.comision,
+      // Sin pedidos en el período se muestra el porcentaje que tiene hoy.
+      porcentajes: porcentajes.length > 0 ? porcentajes : [Number(v.comision_pct)],
     };
   });
 
@@ -75,6 +105,11 @@ export default async function PaginaComisiones({
         </span>
       </form>
 
+      <p className="text-xs text-stone-500">
+        Cuenta solo los pedidos entregados. Cada pedido usa el porcentaje que tenía el vendedor
+        cuando se cargó, así cambiarle la comisión no mueve lo ya ganado.
+      </p>
+
       {error ? (
         <div className={`${estilos.tarjeta} overflow-hidden`}>
           <EstadoVacio>No se pudieron cargar los pedidos: {error.message}</EstadoVacio>
@@ -94,7 +129,13 @@ export default async function PaginaComisiones({
                 </>
               ),
             },
-            { encabezado: "Comisión", celda: (fila) => formatearComision(fila.comision_pct) },
+            {
+              encabezado: "Comisión",
+              celda: (fila) =>
+                // Si en el período hubo un cambio de porcentaje, se muestran
+                // los dos en vez de un número que no explicaría el total.
+                fila.porcentajes.map((pct) => formatearComision(pct)).join(" y "),
+            },
             { encabezado: "Pedidos", celda: (fila) => fila.cantidad },
             { encabezado: "Total vendido", celda: (fila) => formatearPrecio(fila.totalVendido) },
             { encabezado: "A pagar", celda: (fila) => formatearPrecio(fila.comision) },

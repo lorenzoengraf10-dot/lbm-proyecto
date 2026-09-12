@@ -170,6 +170,12 @@ export type Database = {
           corregido_en: string | null;
           corregido_por: string | null;
           motivo_correccion: string | null;
+          estado: Database["public"]["Enums"]["estado_pedido"];
+          forma_pago: Database["public"]["Enums"]["forma_pago"] | null;
+          completado_en: string | null;
+          cobrado_en: string | null;
+          /** Congelado al crear el pedido: cambiarle la comisión al vendedor no toca los pedidos ya hechos. */
+          comision_pct: number;
         };
         Insert: {
           id?: string;
@@ -182,12 +188,23 @@ export type Database = {
           corregido_en?: string | null;
           corregido_por?: string | null;
           motivo_correccion?: string | null;
+          estado?: Database["public"]["Enums"]["estado_pedido"];
+          forma_pago?: Database["public"]["Enums"]["forma_pago"] | null;
+          completado_en?: string | null;
+          cobrado_en?: string | null;
+          /** Lo completa trg_set_comision_pct_pedido desde el vendedor si no viene. */
+          comision_pct?: number;
         };
         Update: {
           id?: string;
           visita_id?: string;
           comercio_id?: string;
           vendedor_id?: string;
+          estado?: Database["public"]["Enums"]["estado_pedido"];
+          forma_pago?: Database["public"]["Enums"]["forma_pago"] | null;
+          completado_en?: string | null;
+          cobrado_en?: string | null;
+          comision_pct?: number;
           fecha?: string;
           total?: number;
           created_at?: string;
@@ -307,9 +324,23 @@ export type Database = {
         Args: { p_pedido_id: string; p_items: Json; p_motivo: string };
         Returns: undefined;
       };
+      cambiar_estado_pedido: {
+        Args: {
+          p_pedido_id: string;
+          p_estado: Database["public"]["Enums"]["estado_pedido"];
+          p_forma_pago?: Database["public"]["Enums"]["forma_pago"] | null;
+        };
+        Returns: undefined;
+      };
+      marcar_cobrado: {
+        Args: { p_pedido_id: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       rol_usuario: "admin" | "vendedor";
+      estado_pedido: "pedido" | "preparado" | "completado";
+      forma_pago: "efectivo" | "transferencia" | "cuenta_corriente";
     };
     CompositeTypes: Record<string, never>;
   };

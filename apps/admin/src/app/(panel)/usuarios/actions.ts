@@ -201,3 +201,61 @@ export async function cambiarEstadoUsuario(formData: FormData): Promise<void> {
   revalidatePath("/usuarios");
   revalidatePath(`/usuarios/${id}`);
 }
+
+/**
+ * Cambia el porcentaje de comisión de un vendedor. El cambio vale para los
+ * pedidos que vengan de ahora en más: los ya cargados tienen su propio
+ * comision_pct congelado desde que se crearon (migración 20260912000001), así
+ * que ni las comisiones ya pagadas ni los reportes viejos se mueven.
+ */
+export async function cambiarComision(
+  _estadoPrevio: EstadoFormulario,
+  formData: FormData
+): Promise<EstadoFormulario> {
+  const { supabase } = await requerirAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return formularioFallo("Falta el vendedor.");
+
+  // Se acepta tanto "3.5" como "3,5": el teclado del panel es el de siempre y
+  // en Argentina la coma es lo natural.
+  const crudo = String(formData.get("comision_pct") ?? "").trim().replace(",", ".");
+  const pct = Number(crudo);
+
+  if (crudo === "" || !Number.isFinite(pct)) {
+    return formularioFallo("Poné un porcentaje, por ejemplo 3 o 3,5.");
+  }
+  if (pct < 0 || pct > 100) {
+    return formularioFallo("El porcentaje tiene que estar entre 0 y 100.");
+  }
+  // numeric(5,2) en la base: más de dos decimales se redondearían en silencio.
+  const redondeado = Math.round(pct * 100) / 100;
+
+  const { data: usuario } = await supabase
+    .from("usuarios")
+    .select("rol")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!usuario) return formularioFallo("No se encontró el vendedor.");
+  if (usuario.rol !== "vendedor") {
+    return formularioFallo("Solo los vendedores cobran comisión.");
+  }
+
+  const { error } = await supabase
+    .from("usuarios")
+    .update({ comision_pct: redondeado })
+    .eq("id", id);
+
+  if (error) {
+    return formularioFallo(mensajeDeError(error, "Ya existe ese valor."));
+  }
+
+  revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${id}`);
+  revalidatePath("/comisiones");
+
+  return formularioExito(
+    `Comisión actualizada a ${redondeado}%. Vale para los pedidos nuevos; los anteriores quedan como estaban.`
+  );
+}

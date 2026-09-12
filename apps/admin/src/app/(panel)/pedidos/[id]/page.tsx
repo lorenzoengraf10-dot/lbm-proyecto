@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { Desplegable } from "@/components/desplegable";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { formatearCantidad, formatearFechaHora, formatearPrecio } from "@/lib/formato";
+import { formatearCantidad, formatearComision, formatearFechaHora, formatearPrecio } from "@/lib/formato";
 import { corregirPedido } from "./actions";
+import { PanelEstado } from "./panel-estado";
 import { FormularioCorreccion } from "./formulario-correccion";
 
 export default async function PaginaPedido({ params }: { params: Promise<{ id: string }> }) {
@@ -13,7 +14,9 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
 
   const { data: pedido } = await supabase
     .from("pedidos")
-    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en, corregido_por, motivo_correccion")
+    .select(
+      "id, comercio_id, vendedor_id, fecha, total, corregido_en, corregido_por, motivo_correccion, estado, forma_pago, cobrado_en, comision_pct"
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -58,6 +61,13 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
           </p>
         ) : null}
       </div>
+
+      <PanelEstado
+        pedidoId={pedido.id}
+        estado={pedido.estado}
+        formaPago={pedido.forma_pago}
+        cobradoEn={pedido.cobrado_en}
+      />
 
       {pedido.corregido_en ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -105,9 +115,26 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
         )}
       </div>
 
-      <div className={`${estilos.tarjeta} flex items-center justify-between p-5`}>
-        <span className="text-sm font-medium text-stone-900">Total del pedido</span>
-        <span className="text-lg font-semibold text-stone-900">{formatearPrecio(pedido.total)}</span>
+      <div className={`${estilos.tarjeta} space-y-2 p-5`}>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-stone-900">Total del pedido</span>
+          <span className="text-lg font-semibold text-stone-900">{formatearPrecio(pedido.total)}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm text-stone-500">
+          <span>
+            Comisión de {vendedor?.nombre ?? "el vendedor"} ({formatearComision(pedido.comision_pct)})
+            {Number(pedido.comision_pct) !== Number(vendedor?.comision_pct ?? pedido.comision_pct) ? (
+              <span className="text-stone-400">
+                {" "}
+                · hoy cobra {formatearComision(vendedor?.comision_pct ?? 0)}
+              </span>
+            ) : null}
+          </span>
+          <span>
+            {formatearPrecio((Number(pedido.total) * Number(pedido.comision_pct)) / 100)}
+            {pedido.estado === "completado" ? "" : " (cuando se entregue)"}
+          </span>
+        </div>
       </div>
 
       <Desplegable titulo="Corregir este pedido">

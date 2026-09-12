@@ -4,10 +4,14 @@ import { ordenarPorCodigo } from "@lbm/shared";
 import { crearClienteNavegador } from "./supabase-browser";
 import {
   encolar,
+  encolarEstado,
   guardarCatalogo,
   guardarPerfil,
   leerCola,
+  leerColaEstados,
   quitarDeCola,
+  quitarEstadoDeCola,
+  type CambioEstadoPendiente,
   type PendienteCola,
 } from "./almacen-local";
 
@@ -38,19 +42,40 @@ export async function registrarPendiente(pendiente: PendienteCola): Promise<Resu
   return sigueEnCola ? { estado: "en-cola" } : { estado: "subido" };
 }
 
+/**
+ * Marca un pedido como preparado o entregado (o lo cobra), ande o no la señal.
+ * Mismo camino que los pedidos: primero se anota en el celular y después se
+ * intenta subir, así el vendedor nunca pierde lo que marcó en la calle.
+ */
+export async function registrarCambioEstado(
+  cambio: CambioEstadoPendiente
+): Promise<ResultadoCarga> {
+  await encolarEstado(cambio);
+  const { errores } = await sincronizar();
+
+  const propio = errores.get(cambio.pedidoId);
+  if (propio) return { estado: "rechazado", motivo: propio };
+
+  const sigueEnCola = (await leerColaEstados()).some((c) => c.pedidoId === cambio.pedidoId);
+  return sigueEnCola ? { estado: "en-cola" } : { estado: "subido" };
+}
+
 export interface ResultadoSincronizacion {
   subidos: number;
   pendientes: number;
-  /** Motivo del rechazo, por visitaId, de lo que no pudo subir en esta pasada. */
+  /** Motivo del rechazo, por visitaId o pedidoId, de lo que no pudo subir en esta pasada. */
   errores: Map<string, string>;
 }
 
 export async function sincronizar(): Promise<ResultadoSincronizacion> {
   const cola = await leerCola();
+  const colaEstados = await leerColaEstados();
   const errores = new Map<string, string>();
-  if (cola.length === 0) return { subidos: 0, pendientes: 0, errores };
+  if (cola.length === 0 && colaEstados.length === 0) {
+    return { subidos: 0, pendientes: 0, errores };
+  }
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return { subidos: 0, pendientes: cola.length, errores };
+    return { subidos: 0, pendientes: cola.length + colaEstados.length, errores };
   }
 
   const supabase = crearClienteNavegador();
@@ -78,7 +103,31 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
     await encolar({ ...pendiente, error: error.message });
   }
 
-  return { subidos, pendientes: (await leerCola()).length, errores };
+  // Los estados van DESPUÉS de los pedidos, a propósito: si el vendedor cargó
+  // un pedido y lo entregó todo sin señal, el pedido tiene que existir en la
+  // base antes de que se le pueda cambiar el estado. Si aun así el pedido no
+  // llegó a subir, el cambio queda en la cola y entra en la próxima pasada.
+  for (const cambio of colaEstados) {
+    const { error } = cambio.cobrar
+      ? await supabase.rpc("marcar_cobrado", { p_pedido_id: cambio.pedidoId })
+      : await supabase.rpc("cambiar_estado_pedido", {
+          p_pedido_id: cambio.pedidoId,
+          p_estado: cambio.estado,
+          p_forma_pago: cambio.formaPago,
+        });
+
+    if (!error) {
+      await quitarEstadoDeCola(cambio.pedidoId);
+      subidos += 1;
+      continue;
+    }
+
+    errores.set(cambio.pedidoId, error.message);
+    await encolarEstado({ ...cambio, error: error.message });
+  }
+
+  const pendientes = (await leerCola()).length + (await leerColaEstados()).length;
+  return { subidos, pendientes, errores };
 }
 
 /** Refresca el catálogo guardado en el celular. Silencioso si no hay señal. */
