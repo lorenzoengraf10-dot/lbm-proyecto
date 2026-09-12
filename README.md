@@ -96,18 +96,18 @@ Queda en http://localhost:3000 (o el puerto que esté libre). Entra con usuario 
 
 ## Importar la cartera de comercios
 
-Desde el panel: **Comercios → Importar desde CSV**. Muestra una previsualización con las filas válidas y las que se saltean antes de confirmar.
+Desde el panel, *Comercios → Importar*. Sirve un **Excel** (.xlsx) o un CSV con las columnas `codigo`, `nombre` y `telefono`:
 
-También existe la versión de línea de comandos, útil para la carga inicial grande:
+| codigo | nombre | telefono |
+|---|---|---|
+| CP1 | Almacén Don José | 2920412233 |
+| CP2 | Kiosco Sur | 02920-45-6677 |
 
-```bash
-pnpm --filter @lbm/scripts run import:comercios -- ./mi-archivo.csv --dry-run
-pnpm --filter @lbm/scripts run import:comercios -- ./mi-archivo.csv
-```
+No hace falta que la planilla esté prolija: puede tener un título arriba, filas vacías en el medio, y los títulos de las columnas escritos como salga (`código`, `cod`, `tel`, `celular`…). Los códigos se guardan en mayúsculas y, si uno ya existe, se actualizan sus datos en vez de duplicarlo.
 
-El CSV necesita las columnas `codigo,nombre,localidad`. Los códigos se guardan en mayúsculas y la importación es segura de repetir: actualiza por `codigo` en vez de duplicar (y no reactiva comercios dados de baja).
+La **localidad** se carga una sola vez en la pantalla y vale para todo el archivo (viene con *Carmen de Patagones*). Si el archivo trae una columna `localidad`, esa manda.
 
-`scripts/comercios-cp.csv` ya trae CP1 a CP100 con nombres provisorios (`Comercio CP1`, etc.) para poder arrancar: se importa una vez y después cada nombre se corrige desde el panel a medida que se confirman.
+Antes de guardar nada se muestra una previsualización con lo que va a entrar y qué filas se saltean y por qué.
 
 ## QR de los comercios
 

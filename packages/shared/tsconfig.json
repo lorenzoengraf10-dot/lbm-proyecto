@@ -1,6 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // DOM además de ES2022: este paquete lo usan las dos apps y el servidor, y
+    // derivarPassword va con Web Crypto (crypto.subtle, TextEncoder), que es
+    // global en el navegador y en Node pero cuyos tipos viven en lib.dom.
+    "lib": ["ES2022", "DOM"],
     "outDir": "dist",
     "rootDir": "src"
   },

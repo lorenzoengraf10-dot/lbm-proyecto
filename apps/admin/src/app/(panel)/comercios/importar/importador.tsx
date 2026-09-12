@@ -3,12 +3,37 @@
 import { useState, type ChangeEvent } from "react";
 import type { ResultadoImportacion } from "@lbm/shared";
 import { Mensaje, estilos } from "@/components/ui";
-import { confirmarImportacion, previsualizarCsv, type ResultadoImport } from "./actions";
+import {
+  confirmarImportacion,
+  previsualizarArchivo,
+  type ArchivoImportado,
+  type ResultadoImport,
+} from "./actions";
 
 const FILAS_EN_PREVIA = 20;
 
+/** Lee el archivo del disco y lo deja listo para mandar al servidor. */
+async function leerArchivo(archivo: File, localidadPorDefecto: string): Promise<ArchivoImportado> {
+  const esExcel = /\.xlsx?$/i.test(archivo.name);
+
+  if (!esExcel) {
+    return { tipo: "csv", contenido: await archivo.text(), localidadPorDefecto };
+  }
+
+  // Un Excel es binario: viaja en base64. Se arma de a pedazos porque
+  // String.fromCharCode con un archivo entero se pasa del límite de argumentos.
+  const bytes = new Uint8Array(await archivo.arrayBuffer());
+  let binario = "";
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binario += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return { tipo: "excel", contenido: btoa(binario), localidadPorDefecto };
+}
+
 export function ImportadorCsv() {
-  const [contenido, setContenido] = useState<string | null>(null);
+  const [archivo, setArchivo] = useState<ArchivoImportado | null>(null);
+  const [nombreArchivo, setNombreArchivo] = useState("");
+  const [localidad, setLocalidad] = useState("Carmen de Patagones");
   const [previa, setPrevia] = useState<ResultadoImportacion | null>(null);
   const [resultado, setResultado] = useState<ResultadoImport | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -16,29 +41,47 @@ export function ImportadorCsv() {
   async function alElegirArchivo(evento: ChangeEvent<HTMLInputElement>) {
     setPrevia(null);
     setResultado(null);
-    setContenido(null);
+    setArchivo(null);
 
-    const archivo = evento.target.files?.[0];
-    if (!archivo) return;
+    const elegido = evento.target.files?.[0];
+    if (!elegido) return;
 
     setOcupado(true);
     try {
-      const texto = await archivo.text();
-      setPrevia(await previsualizarCsv(texto));
-      setContenido(texto);
+      const leido = await leerArchivo(elegido, localidad);
+      setNombreArchivo(elegido.name);
+      setPrevia(await previsualizarArchivo(leido));
+      setArchivo(leido);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  // Cambiar la localidad después de elegir el archivo tiene que rehacer la
+  // previsualización: si no, lo que se ve y lo que se importa no coinciden.
+  async function alCambiarLocalidad(nueva: string) {
+    setLocalidad(nueva);
+    if (!archivo) return;
+
+    const actualizado = { ...archivo, localidadPorDefecto: nueva };
+    setArchivo(actualizado);
+    setOcupado(true);
+    try {
+      setPrevia(await previsualizarArchivo(actualizado));
     } finally {
       setOcupado(false);
     }
   }
 
   async function alConfirmar() {
-    if (!contenido) return;
+    if (!archivo) return;
 
     setOcupado(true);
     try {
-      setResultado(await confirmarImportacion(contenido));
+      setResultado(await confirmarImportacion(archivo));
       setPrevia(null);
-      setContenido(null);
+      setArchivo(null);
+      setNombreArchivo("");
     } finally {
       setOcupado(false);
     }
@@ -46,20 +89,40 @@ export function ImportadorCsv() {
 
   return (
     <div className="space-y-4">
-      <div className={`${estilos.tarjeta} space-y-3 p-5`}>
+      <div className={`${estilos.tarjeta} space-y-4 p-5`}>
         <p className="text-sm text-stone-600">
-          El archivo tiene que ser un CSV con las columnas{" "}
-          <code className="rounded bg-stone-100 px-1">codigo,nombre,localidad</code>. Los códigos se
-          guardan en mayúsculas y, si uno ya existe, se actualizan su nombre y localidad (no se
-          duplica ni se reactiva un comercio dado de baja).
+          Sirve un <strong>Excel</strong> (.xlsx) o un CSV con las columnas{" "}
+          <code className="rounded bg-stone-100 px-1">codigo</code>,{" "}
+          <code className="rounded bg-stone-100 px-1">nombre</code> y{" "}
+          <code className="rounded bg-stone-100 px-1">telefono</code>. Los códigos se guardan en
+          mayúsculas y, si uno ya existe, se actualizan sus datos (no se duplica ni se reactiva un
+          comercio dado de baja).
         </p>
+
+        <label className="block space-y-1 text-sm">
+          <span className={estilos.etiqueta}>Localidad</span>
+          <input
+            value={localidad}
+            onChange={(evento) => void alCambiarLocalidad(evento.target.value)}
+            disabled={ocupado}
+            className={`${estilos.input} max-w-xs`}
+          />
+          <span className="block text-xs text-stone-500">
+            Se usa para todos los comercios del archivo. Si el archivo trae una columna{" "}
+            <code className="rounded bg-stone-100 px-1">localidad</code>, esa manda.
+          </span>
+        </label>
+
         <input
           type="file"
-          accept=".csv,text/csv"
+          accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={alElegirArchivo}
           disabled={ocupado}
           className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-stone-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-stone-700"
         />
+        {nombreArchivo ? (
+          <p className="text-xs text-stone-500">Archivo elegido: {nombreArchivo}</p>
+        ) : null}
       </div>
 
       {resultado?.error ? <Mensaje tipo="error">{resultado.error}</Mensaje> : null}
@@ -93,11 +156,12 @@ export function ImportadorCsv() {
                   : ""}
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[30rem] border-collapse">
+                <table className="w-full min-w-[34rem] border-collapse">
                   <thead className="border-b border-stone-200">
                     <tr>
                       <th className={estilos.encabezadoCelda}>Código</th>
                       <th className={estilos.encabezadoCelda}>Nombre</th>
+                      <th className={estilos.encabezadoCelda}>Teléfono</th>
                       <th className={estilos.encabezadoCelda}>Localidad</th>
                     </tr>
                   </thead>
@@ -108,6 +172,7 @@ export function ImportadorCsv() {
                           {fila.codigo}
                         </td>
                         <td className={estilos.celda}>{fila.nombre}</td>
+                        <td className={estilos.celda}>{fila.telefono ?? "—"}</td>
                         <td className={estilos.celda}>{fila.localidad}</td>
                       </tr>
                     ))}

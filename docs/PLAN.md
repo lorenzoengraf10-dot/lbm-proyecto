@@ -344,3 +344,25 @@ El dueño pidió lo mismo para él: tocar su nombre y escribir seis números, en
 Conviene tener presente que fijar un PIN **reemplaza la contraseña** (es la misma credencial de Auth vista de dos maneras). O sea: si se quiere dejar la contraseña de respaldo lista, hay que cambiarla *después* de poner el PIN. La ficha del usuario lo dice.
 
 El panel lista solo a los administradores, no a los repartidores, y viceversa: cada puerta muestra únicamente a quien puede entrar por ella.
+
+## 19. Cargar la cartera desde un Excel
+
+Ya existía la importación por CSV, pero el dueño no arma CSV: arma una planilla en Excel, con el nombre, el código y el teléfono. Ahora la misma pantalla acepta las dos cosas.
+
+**Se lee con ExcelJS, en el servidor.** El peso de la librería no llega al navegador, y a cambio no hay que pelear con los casos raros de un .xlsx real (celdas con fórmula, texto con formato, números que Excel guarda como número).
+
+Lo que hace que ande con una planilla hecha a mano y no solo con una perfecta:
+
+- **Busca la fila de encabezados**, no asume que es la primera. Una planilla casera suele tener un título arriba y alguna fila vacía; se recorren las primeras veinte hasta encontrar una que tenga *código* y *nombre*.
+- **Acepta los nombres de columna como salgan**: `codigo`/`código`/`cod`/`cp`, `telefono`/`teléfono`/`tel`/`celular`/`whatsapp`. Exigir un encabezado exacto era garantía de que la primera importación fallara.
+- **Un teléfono escrito como número no se pierde.** Excel convierte `2920412233` en número y una lectura ingenua lo dejaría como `2.92041e+09`.
+- **Las filas vacías del medio se saltean sin avisar.** En una planilla a mano siempre sobran; anunciarlas como error sería solo ruido.
+- **Los errores nombran la fila que se ve en Excel.** Si el archivo tiene un título arriba y filas vacías salteadas, la posición en la lista no es la fila de la planilla. Se lleva el número real de cada fila para que "Fila 9" sea la fila 9 de la pantalla del dueño.
+
+**La localidad se pone una vez, arriba.** La columna es obligatoria en la base, pero casi toda la cartera está en la misma localidad, así que repetirla en cada fila del Excel no tiene sentido. Se carga en la pantalla (viene con *Carmen de Patagones*) y vale para todo el archivo; si el Excel trae una columna `localidad`, esa manda. Cambiar el valor rehace la previsualización, para que lo que se ve sea lo que se va a guardar.
+
+El archivo se parsea **siempre en el servidor**, también al previsualizar: la previsualización es lo que se muestra, no lo que se guarda. El Excel viaja en base64 porque es binario; el CSV sigue viajando como texto.
+
+### Un error que estaba tapado
+
+Al tocar `packages/shared` salió que su `typecheck` venía **fallando desde el commit del login por PIN**: `derivarPassword` usa `crypto.subtle` y `TextEncoder`, que son globales en el navegador y en Node pero cuyos tipos viven en `lib.dom`, y el tsconfig de ese paquete solo cargaba `ES2022`. No rompía nada en producción —las dos apps compilan con su propio tsconfig, que sí incluye DOM— pero dejaba el chequeo del repo en rojo. Se me pasó por filtrar la salida de `pnpm typecheck` con `tail`, que se comió el error. Conviene mirar la salida completa, o filtrar por `error TS` en vez de por las últimas líneas.

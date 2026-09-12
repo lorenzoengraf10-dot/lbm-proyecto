@@ -65,4 +65,5 @@ export interface ComercioImportRow {
   codigo: string;
   nombre: string;
   localidad: string;
+  telefono?: string;
 }

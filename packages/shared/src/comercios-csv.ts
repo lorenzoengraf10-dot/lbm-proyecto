@@ -7,28 +7,54 @@ export interface ResultadoImportacion {
   errores: string[];
 }
 
-interface FilaCsv {
+/** Una fila tal como viene del archivo, antes de validar nada. */
+export interface FilaComercio {
   codigo?: string;
   nombre?: string;
   localidad?: string;
+  telefono?: string;
 }
 
-export const COLUMNAS_CSV_COMERCIOS = ["codigo", "nombre", "localidad"] as const;
+// Lo mínimo que tiene que traer el archivo. La localidad y el teléfono son
+// opcionales: la mayoría de los comercios de la cartera están en la misma
+// localidad, así que se completa una sola vez en la pantalla de importación en
+// vez de repetirla en cada fila.
+export const COLUMNAS_CSV_COMERCIOS = ["codigo", "nombre"] as const;
 
-function normalizarFilas(filas: FilaCsv[]): ResultadoImportacion {
+/**
+ * Valida y limpia las filas de un archivo, venga de un CSV o de un Excel.
+ *
+ * @param localidadPorDefecto la que se usa en las filas que no traen una.
+ * @param numeroDeFila con qué número nombrar cada fila en los errores. Por
+ *   defecto, la posición contando el encabezado como fila 1 — que es lo que
+ *   pasa en un CSV. Un Excel puede tener un título arriba y filas vacías en el
+ *   medio, así que pasa el número real de la planilla para que el mensaje
+ *   señale la fila que el dueño ve en pantalla.
+ */
+export function normalizarFilasComercios(
+  filas: FilaComercio[],
+  localidadPorDefecto = "",
+  numeroDeFila: (indice: number) => number = (indice) => indice + 2
+): ResultadoImportacion {
   const validas: ComercioImportRow[] = [];
   const errores: string[] = [];
   const codigosVistos = new Map<string, number>();
 
   filas.forEach((fila, indice) => {
-    const numeroFila = indice + 2; // +1 por el header, +1 porque el índice arranca en 0
+    const numeroFila = numeroDeFila(indice);
     const codigo = normalizarCodigoComercio(fila.codigo ?? "");
     const nombre = fila.nombre?.trim();
-    const localidad = fila.localidad?.trim();
+    const localidad = fila.localidad?.trim() || localidadPorDefecto.trim();
+    const telefono = fila.telefono?.trim();
 
-    if (!codigo || !nombre || !localidad) {
+    if (!codigo || !nombre) {
+      errores.push(`Fila ${numeroFila}: faltan el código o el nombre — ${JSON.stringify(fila)}`);
+      return;
+    }
+
+    if (!localidad) {
       errores.push(
-        `Fila ${numeroFila}: faltan datos (codigo/nombre/localidad) — ${JSON.stringify(fila)}`
+        `Fila ${numeroFila}: falta la localidad. Poné una abajo para usar en todas, o agregá la columna al archivo.`
       );
       return;
     }
@@ -46,14 +72,17 @@ function normalizarFilas(filas: FilaCsv[]): ResultadoImportacion {
     }
 
     codigosVistos.set(codigo, numeroFila);
-    validas.push({ codigo, nombre, localidad });
+    validas.push({ codigo, nombre, localidad, ...(telefono ? { telefono } : {}) });
   });
 
   return { validas, errores };
 }
 
-export function parsearCsvComercios(contenido: string): ResultadoImportacion {
-  let filas: FilaCsv[];
+export function parsearCsvComercios(
+  contenido: string,
+  localidadPorDefecto = ""
+): ResultadoImportacion {
+  let filas: FilaComercio[];
 
   try {
     filas = parse(contenido, {
@@ -77,11 +106,11 @@ export function parsearCsvComercios(contenido: string): ResultadoImportacion {
     return {
       validas: [],
       errores: [
-        `Al CSV le faltan columnas: ${columnasFaltantes.join(", ")}. ` +
-          `Se esperan las columnas ${COLUMNAS_CSV_COMERCIOS.join(",")}.`,
+        `Al archivo le faltan columnas: ${columnasFaltantes.join(", ")}. ` +
+          `Se esperan al menos ${COLUMNAS_CSV_COMERCIOS.join(" y ")} (localidad y telefono son opcionales).`,
       ],
     };
   }
 
-  return normalizarFilas(filas);
+  return normalizarFilasComercios(filas, localidadPorDefecto);
 }
