@@ -383,3 +383,26 @@ Esto importaba sobre todo para el despliegue: las cuentas que ya existían queda
 **La salida por contraseña del panel no estaba a mano.** Solo aparecía después de elegirse a uno mismo. Siendo el único camino que queda si el dueño pierde el PIN, ahora está también en la pantalla de elegir nombre.
 
 Y una del entorno: un build interrumpido dejó `.next` a medias —el HTML pedía un chunk que no existía en disco— y la app cargaba sin JavaScript, así que todo parecía roto sin ningún error en el servidor. Ante un comportamiento así, `rm -rf .next` y reconstruir antes de buscar el bug en el código.
+
+## 20. El pedido, en tres toques
+
+El dueño lo dijo corto: *"entrar, tocar pedido, elegir comercio, elegir los productos y finalizar"*. Cargar un pedido es lo único que el repartidor hace todo el día, veinte o treinta veces; cualquier toque de más se paga multiplicado por eso.
+
+**Se sacó la pantalla del medio.** Antes, tocar un comercio abría una ficha con dos botones —*Cargar pedido* y *Registrar visita sin pedido*— y recién el primero llevaba al formulario. Pero elegir el comercio ya es decir que se le va a cargar algo: ahora tocarlo abre los productos directamente. Pasar sin pedido no desapareció, bajó a donde corresponde: un enlace al pie, *"Pasé pero no me pidió nada"*, para que no compita con lo que se viene a hacer.
+
+**La pestaña se llama por lo que hace.** Decía *Comercios*, que describe lo que muestra, no para qué se entra. Ahora dice **Pedido** y es la primera. Escanear, Mis pedidos y Resumen siguen igual, a un toque.
+
+**Y lo que más tiempo ahorra: repetir lo de la vez pasada.** Los comercios piden casi siempre lo mismo, así que escribir las mismas cinco cantidades cada semana era el verdadero cuello de botella. Ahora el formulario trae un botón *"Repetir lo de la vez pasada (5 productos)"* que las precarga, y ordena la lista poniendo primero lo que ese comercio suele llevar, marcado con un *· suele llevar*. Con casi veinte productos en el catálogo, eso evita scrollear la lista entera buscando los cinco de siempre.
+
+Los últimos pedidos se bajan con el catálogo y **viven en el celular**, así que repetir funciona igual sin señal — que es cuando más falta hace. Se traen los 300 pedidos más recientes del repartidor y se guarda uno por comercio: alcanza para toda la cartera sin bajarse el historial.
+
+### Cuánto se ahorró
+
+La prueba cuenta los toques reales sobre la pantalla, que es la medida que importa:
+
+| | Antes | Ahora |
+|---|---|---|
+| Entrar y llegar al formulario | comercio + *Cargar pedido* | **un toque en el comercio** |
+| Un pedido igual al anterior | escribir cada cantidad a mano | **3 toques**: comercio, repetir, confirmar |
+
+Un pedido repetido pasó de "buscar, tocar, tocar, escribir cinco números, confirmar" a **tres toques**.

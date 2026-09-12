@@ -7,6 +7,7 @@ import {
   encolarEstado,
   guardarCatalogo,
   guardarPerfil,
+  guardarUltimosPedidos,
   leerCola,
   leerColaEstados,
   quitarDeCola,
@@ -139,13 +140,25 @@ export async function refrescarCatalogo(): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: comercios }, { data: productos }, { data: perfil }] = await Promise.all([
-    supabase.from("comercios").select("id, codigo, nombre, localidad").eq("activo", true).order("codigo"),
-    supabase.from("productos").select("id, nombre, precio, unidad_medida").eq("activo", true).order("nombre"),
-    user
-      ? supabase.from("usuarios").select("nombre").eq("id", user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const [{ data: comercios }, { data: productos }, { data: perfil }, { data: pedidos }] =
+    await Promise.all([
+      supabase.from("comercios").select("id, codigo, nombre, localidad").eq("activo", true).order("codigo"),
+      supabase.from("productos").select("id, nombre, precio, unidad_medida").eq("activo", true).order("nombre"),
+      user
+        ? supabase.from("usuarios").select("nombre").eq("id", user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      // Los últimos pedidos, para poder repetirlos sin señal. Se traen los más
+      // recientes y se guarda uno por comercio: alcanza para que cada comercio
+      // de la cartera tenga el suyo sin bajarse el historial entero.
+      user
+        ? supabase
+            .from("pedidos")
+            .select("comercio_id, fecha, pedido_items(producto_id, cantidad)")
+            .eq("vendedor_id", user.id)
+            .order("fecha", { ascending: false })
+            .limit(300)
+        : Promise.resolve({ data: null }),
+    ]);
 
   if (comercios && productos) {
     // CP2 antes que CP10: el vendedor busca por código en la lista.
@@ -153,5 +166,21 @@ export async function refrescarCatalogo(): Promise<void> {
   }
   if (perfil?.nombre) {
     await guardarPerfil(perfil.nombre);
+  }
+
+  if (pedidos) {
+    // Vienen ordenados del más nuevo al más viejo: el primero de cada comercio
+    // es el último que se le cargó.
+    const porComercio: Record<string, { producto_id: string; cantidad: number }[]> = {};
+    for (const pedido of pedidos) {
+      const items = pedido.pedido_items ?? [];
+      if (porComercio[pedido.comercio_id] || items.length === 0) continue;
+      porComercio[pedido.comercio_id] = items.map((item) => ({
+        producto_id: item.producto_id,
+        // numeric llega como string (ver docs/PLAN.md sección 10).
+        cantidad: Number(item.cantidad),
+      }));
+    }
+    await guardarUltimosPedidos(porComercio);
   }
 }

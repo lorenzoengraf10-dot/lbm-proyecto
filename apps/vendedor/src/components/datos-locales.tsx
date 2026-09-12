@@ -14,7 +14,9 @@ import {
   leerComercios,
   leerCola,
   leerProductos,
+  leerUltimosPedidos,
   type ComercioLocal,
+  type ItemUltimoPedido,
   type PendienteCola,
   type ProductoLocal,
 } from "@/lib/almacen-local";
@@ -24,6 +26,8 @@ interface DatosLocales {
   comercios: ComercioLocal[];
   productos: ProductoLocal[];
   cola: PendienteCola[];
+  /** Lo último que pidió cada comercio, por id, para poder repetirlo. */
+  ultimosPedidos: Record<string, ItemUltimoPedido[]>;
   cargando: boolean;
   hayConexion: boolean;
   /** Comercio elegido al escanear, para que /comercios lo abra al llegar. */
@@ -53,6 +57,7 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
   const [comercios, setComercios] = useState<ComercioLocal[]>([]);
   const [productos, setProductos] = useState<ProductoLocal[]>([]);
   const [cola, setCola] = useState<PendienteCola[]>([]);
+  const [ultimosPedidos, setUltimosPedidos] = useState<Record<string, ItemUltimoPedido[]>>({});
   const [cargando, setCargando] = useState(true);
   const [comercioRecienEscaneado, setComercioRecienEscaneado] = useState<string | null>(null);
 
@@ -66,14 +71,16 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
   );
 
   const leerDeLocal = useCallback(async () => {
-    const [comerciosLocales, productosLocales, colaLocal] = await Promise.all([
+    const [comerciosLocales, productosLocales, colaLocal, ultimos] = await Promise.all([
       leerComercios(),
       leerProductos(),
       leerCola(),
+      leerUltimosPedidos(),
     ]);
     setComercios(comerciosLocales);
     setProductos(productosLocales);
     setCola(colaLocal);
+    setUltimosPedidos(ultimos);
   }, []);
 
   const recargar = useCallback(async () => {
@@ -111,13 +118,14 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
       comercios,
       productos,
       cola,
+      ultimosPedidos,
       cargando,
       hayConexion,
       comercioRecienEscaneado,
       elegirComercio: setComercioRecienEscaneado,
       recargar,
     }),
-    [comercios, productos, cola, cargando, hayConexion, comercioRecienEscaneado, recargar]
+    [comercios, productos, cola, ultimosPedidos, cargando, hayConexion, comercioRecienEscaneado, recargar]
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

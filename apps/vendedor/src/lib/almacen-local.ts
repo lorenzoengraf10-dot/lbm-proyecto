@@ -133,6 +133,29 @@ export async function leerComercios(): Promise<ComercioLocal[]> {
   return (await conStore<ComercioLocal[]>(CATALOGO, "readonly", (s) => s.get("comercios"))) ?? [];
 }
 
+/**
+ * Lo último que cada comercio pidió, guardado en el celular.
+ *
+ * Los comercios piden casi siempre lo mismo, así que tenerlo a mano convierte
+ * "escribir seis cantidades" en un toque. Y como vive acá, sirve igual sin
+ * señal, que es cuando el repartidor lo necesita.
+ */
+export type ItemUltimoPedido = { producto_id: string; cantidad: number };
+
+export async function guardarUltimosPedidos(
+  porComercio: Record<string, ItemUltimoPedido[]>
+): Promise<void> {
+  await conStore(CATALOGO, "readwrite", (s) => s.put(porComercio, "ultimos-pedidos"));
+}
+
+export async function leerUltimosPedidos(): Promise<Record<string, ItemUltimoPedido[]>> {
+  return (
+    (await conStore<Record<string, ItemUltimoPedido[]>>(CATALOGO, "readonly", (s) =>
+      s.get("ultimos-pedidos")
+    )) ?? {}
+  );
+}
+
 export async function leerProductos(): Promise<ProductoLocal[]> {
   return (await conStore<ProductoLocal[]>(CATALOGO, "readonly", (s) => s.get("productos"))) ?? [];
 }

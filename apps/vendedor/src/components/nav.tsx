@@ -5,8 +5,11 @@ import { usePathname } from "next/navigation";
 import { cerrarSesion } from "@/lib/sesion";
 import { useDatosLocales } from "./datos-locales";
 
+// Cargar un pedido es lo que el repartidor hace todo el día; el resto es
+// para mirar. Por eso va primero y se llama por lo que hace, no por lo que
+// muestra ("Comercios" no decía que ahí se carga el pedido).
 const PESTAÑAS = [
-  { href: "/comercios", etiqueta: "Comercios" },
+  { href: "/comercios", etiqueta: "Pedido" },
   { href: "/escanear", etiqueta: "Escanear" },
   { href: "/mis-pedidos", etiqueta: "Mis pedidos" },
   { href: "/resumen", etiqueta: "Resumen" },

@@ -12,7 +12,7 @@ import { registrarPendiente } from "@/lib/sincronizacion";
  * Si fueran rutas separadas del servidor, cada paso necesitaría red.
  */
 export default function PaginaComercios() {
-  const { comercios, productos, cargando, comercioRecienEscaneado, elegirComercio, recargar } =
+  const { comercios, productos, ultimosPedidos, cargando, comercioRecienEscaneado, elegirComercio, recargar } =
     useDatosLocales();
 
   const [busqueda, setBusqueda] = useState("");
@@ -24,7 +24,6 @@ export default function PaginaComercios() {
   const elegido =
     seleccion ?? (comercioRecienEscaneado ? { id: comercioRecienEscaneado, conPedido: true } : null);
   const comercio = comercios.find((c) => c.id === elegido?.id) ?? null;
-  const cargandoPedido = elegido?.conPedido ?? false;
 
   function volverAlListado() {
     setSeleccion(null);
@@ -114,7 +113,7 @@ export default function PaginaComercios() {
           onClick={volverAlListado}
           className="text-sm text-stone-500 underline"
         >
-          ← Comercios
+          ← Cambiar de comercio
         </button>
 
         <div>
@@ -124,38 +123,33 @@ export default function PaginaComercios() {
           </p>
         </div>
 
-        {cargandoPedido ? (
-          <FormularioPedido
-            productos={productos}
-            textoBoton="Confirmar pedido"
-            destino=""
-            onGuardar={guardarPedido}
-          />
-        ) : (
-          <div className={`${estilos.tarjeta} space-y-3 p-4`}>
-            <button
-              type="button"
-              onClick={() => setSeleccion({ id: comercio.id, conPedido: true })}
-              className={`w-full ${estilos.boton}`}
-            >
-              Cargar pedido
-            </button>
-            <button
-              type="button"
-              onClick={() => void registrarSoloVisita()}
-              className={`w-full ${estilos.botonSecundario}`}
-            >
-              Registrar visita sin pedido
-            </button>
-          </div>
-        )}
+        <FormularioPedido
+          productos={productos}
+          ultimoPedido={ultimosPedidos[comercio.id]}
+          textoBoton="Confirmar pedido"
+          destino=""
+          onGuardar={guardarPedido}
+        />
+
+        {/* Pasar sin pedido es la excepción, no una opción al mismo nivel: va
+            abajo de todo y como enlace, para que no compita con el formulario. */}
+        <button
+          type="button"
+          onClick={() => void registrarSoloVisita()}
+          className="w-full py-2 text-center text-sm text-stone-500 underline"
+        >
+          Pasé pero no me pidió nada
+        </button>
       </>
     );
   }
 
   return (
     <>
-      <h1 className="text-lg font-semibold text-stone-900">Comercios</h1>
+      <div>
+        <h1 className="text-lg font-semibold text-stone-900">Pedido nuevo</h1>
+        <p className="text-sm text-stone-500">¿A qué comercio?</p>
+      </div>
 
       {aviso ? <Mensaje tipo={aviso.tipo}>{aviso.texto}</Mensaje> : null}
 
@@ -180,7 +174,11 @@ export default function PaginaComercios() {
               type="button"
               onClick={() => {
                 setAviso(null);
-                setSeleccion({ id: c.id, conPedido: false });
+                // Directo a los productos: elegir el comercio ya es decir que
+                // se le va a cargar un pedido. Antes había una pantalla en el
+                // medio que preguntaba qué hacer, y era un toque de más en lo
+                // único que el repartidor hace todo el día.
+                setSeleccion({ id: c.id, conPedido: true });
               }}
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-stone-50"
             >
