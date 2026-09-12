@@ -112,38 +112,44 @@ export default async function PaginaUsuario({ params }: { params: Promise<{ id: 
         </>
       ) : null}
 
+      {/* El PIN es con lo que se entra, sea al panel o a la app: va primero. */}
+      <div className={`${estilos.tarjeta} space-y-3 p-5`}>
+        <div>
+          <p className="text-sm font-medium text-stone-900">PIN de acceso</p>
+          <p className="text-sm text-stone-500">
+            {esUnoMismo
+              ? "Con esto entrás al panel: tocás tu nombre y escribís el PIN. Anotalo en algún lado: si lo perdés, nadie te lo puede resetear y vas a tener que entrar con tu contraseña."
+              : usuario.rol === "vendedor"
+                ? "Con esto entra a la app: elige su nombre y escribe el PIN. Si se lo olvida o se lo ve alguien, le ponés uno nuevo acá y el anterior deja de servir."
+                : "Con esto entra al panel. Si se lo olvida, le ponés uno nuevo acá."}
+          </p>
+        </div>
+        <FormularioPin id={usuario.id} nombre={usuario.nombre} />
+      </div>
+
       <div className={`${estilos.tarjeta} space-y-3 p-5`}>
         {esUnoMismo ? (
           <>
             <div>
               <p className="text-sm font-medium text-stone-900">Cambiar mi contraseña</p>
-              <p className="text-sm text-stone-500">Elegí vos la contraseña nueva.</p>
+              <p className="text-sm text-stone-500">
+                La contraseña es el respaldo por si perdés el PIN. Ojo: ponerte un PIN nuevo la
+                reemplaza, así que si querés dejarla lista, cambiala después del PIN.
+              </p>
             </div>
             <FormularioCambiarPassword />
           </>
         ) : (
-          usuario.rol === "vendedor" ? (
-            <>
-              <div>
-                <p className="text-sm font-medium text-stone-900">PIN de acceso</p>
-                <p className="text-sm text-stone-500">
-                  Con esto entra a la app: elige su nombre y escribe el PIN. Si se lo olvida o se lo
-                  ve alguien, le ponés uno nuevo acá y el anterior deja de servir.
-                </p>
-              </div>
-              <FormularioPin id={usuario.id} nombre={usuario.nombre} />
-            </>
-          ) : (
-            <>
-              <div>
-                <p className="text-sm font-medium text-stone-900">Credencial de acceso</p>
-                <p className="text-sm text-stone-500">
-                  Sirve para entrar al panel. Si se la olvidó, generá una nueva acá.
-                </p>
-              </div>
-              <FormularioReset id={usuario.id} nombre={usuario.nombre} />
-            </>
-          )
+          <>
+            <div>
+              <p className="text-sm font-medium text-stone-900">Contraseña de respaldo</p>
+              <p className="text-sm text-stone-500">
+                Solo hace falta si {usuario.nombre} pierde el PIN. Generar una nueva reemplaza al
+                PIN, así que después habrá que ponerle uno.
+              </p>
+            </div>
+            <FormularioReset id={usuario.id} nombre={usuario.nombre} />
+          </>
         )}
       </div>
 

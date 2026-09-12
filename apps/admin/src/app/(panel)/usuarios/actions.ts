@@ -268,7 +268,8 @@ export async function cambiarComision(
 }
 
 /**
- * Le pone al repartidor el PIN con el que va a entrar a la app.
+ * Le pone a alguien el PIN con el que entra: al repartidor a su app, al
+ * administrador al panel.
  *
  * Lo que se guarda en Supabase Auth no es el PIN sino una contraseña derivada
  * con HMAC del PIN + el secreto del servidor (ver derivarPassword). Así, aunque
@@ -298,7 +299,6 @@ export async function fijarPin(
     .maybeSingle();
 
   if (!usuario) return fallo("No se encontró ese usuario.");
-  if (usuario.rol !== "vendedor") return fallo("El PIN es solo para los repartidores.");
 
   const password = await derivarPassword(pin, id, claveServiceRole());
   const { error } = await admin.auth.admin.updateUserById(id, { password });

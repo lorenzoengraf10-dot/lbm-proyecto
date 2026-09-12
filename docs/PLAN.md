@@ -333,3 +333,14 @@ Los dos los disparó la misma pregunta del dueño: *"y por si alguien usa el mis
 La pantalla de login quedaba **prerenderizada en el build**: la lista de repartidores se consultaba una sola vez, sin base, y la pantalla habría mostrado para siempre "todavía no hay repartidores cargados". Se arregla con `export const dynamic = "force-dynamic"`. Vale recordarlo para cualquier página que consulte datos sin sesión.
 
 Y dos del entorno de prueba, que estaban tapando fallas reales: el mock no entendía los operadores `is` ni `neq` (así que la portada del admin recibía listas vacías en silencio en vez de los pedidos por preparar y lo impago), y la base de prueba guardaba fechas absolutas, así que al día siguiente "hoy" ya no era hoy y las pruebas de visitas del día empezaban a fallar solas. Ahora `reiniciar-db.sh` corre todas las fechas el mismo tanto para que la actividad más reciente vuelva a quedar recién hecha.
+
+### El panel también entra por PIN
+
+El dueño pidió lo mismo para él: tocar su nombre y escribir seis números, en vez de la contraseña. Va sobre exactamente el mismo mecanismo —HMAC con el secreto del servidor, intentos contados en `intentos_pin`— con dos diferencias:
+
+- **El bloqueo dura una hora**, no quince minutos. La cuenta de administrador puede todo: borrar comercios, cambiar comisiones, corregir pedidos viejos. Si alguien se pone a probar, que espere más.
+- **Queda el camino de la contraseña**, atrás de un "Entrar con contraseña". Es imprescindible: al repartidor que pierde el PIN se lo resetea el dueño, pero **al dueño no lo destraba nadie**. Sin ese respaldo, olvidarse el PIN sería quedarse afuera del propio negocio.
+
+Conviene tener presente que fijar un PIN **reemplaza la contraseña** (es la misma credencial de Auth vista de dos maneras). O sea: si se quiere dejar la contraseña de respaldo lista, hay que cambiarla *después* de poner el PIN. La ficha del usuario lo dice.
+
+El panel lista solo a los administradores, no a los repartidores, y viceversa: cada puerta muestra únicamente a quien puede entrar por ella.
