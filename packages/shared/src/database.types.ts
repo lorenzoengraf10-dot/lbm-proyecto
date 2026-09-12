@@ -20,6 +20,8 @@ export type Database = {
           comision_pct: number;
           activo: boolean;
           created_at: string;
+          /** Cuándo se le cargó el PIN. null = todavía no tiene y no puede entrar. */
+          pin_fijado_en: string | null;
         };
         Insert: {
           id: string;
@@ -32,6 +34,7 @@ export type Database = {
           comision_pct?: number;
           activo?: boolean;
           created_at?: string;
+          pin_fijado_en?: string | null;
         };
         Update: {
           id?: string;
@@ -41,6 +44,7 @@ export type Database = {
           comision_pct?: number;
           activo?: boolean;
           created_at?: string;
+          pin_fijado_en?: string | null;
         };
         Relationships: [];
       };

@@ -172,7 +172,7 @@ export function ImportadorCsv() {
                           {fila.codigo}
                         </td>
                         <td className={estilos.celda}>{fila.nombre}</td>
-                        <td className={estilos.celda}>{fila.telefono ?? "—"}</td>
+                        <td className={estilos.celda}>{fila.telefono || "—"}</td>
                         <td className={estilos.celda}>{fila.localidad}</td>
                       </tr>
                     ))}

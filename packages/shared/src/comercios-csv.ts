@@ -72,7 +72,7 @@ export function normalizarFilasComercios(
     }
 
     codigosVistos.set(codigo, numeroFila);
-    validas.push({ codigo, nombre, localidad, ...(telefono ? { telefono } : {}) });
+    validas.push({ codigo, nombre, localidad, telefono: telefono || null });
   });
 
   return { validas, errores };

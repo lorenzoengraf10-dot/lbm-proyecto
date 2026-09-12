@@ -13,6 +13,8 @@ const CLAVE_RECORDADO = "lbm_admin_recordado";
 interface Admin {
   id: string;
   nombre: string;
+  /** false = todavía no se le cargó un PIN, así que tiene que entrar con la contraseña. */
+  tienePin: boolean;
 }
 
 export function FormularioLogin({ admins }: { admins: Admin[] }) {
@@ -77,8 +79,21 @@ export function FormularioLogin({ admins }: { admins: Admin[] }) {
             className={`w-full ${estilos.botonSecundario} py-3 text-base`}
           >
             {admin.nombre}
+            {admin.tienePin ? null : (
+              <span className="block text-xs font-normal text-stone-500">todavía sin PIN</span>
+            )}
           </button>
         ))}
+        {/* La salida por contraseña tiene que estar a mano también acá: es lo
+            que queda si el PIN se perdió, y hacer que haya que elegirse a uno
+            mismo primero para encontrarla sería justo al revés. */}
+        <button
+          type="button"
+          onClick={() => setConPassword(true)}
+          className="block w-full text-sm text-stone-500 underline hover:text-stone-900"
+        >
+          Entrar con contraseña
+        </button>
       </div>
     );
   }
@@ -89,6 +104,12 @@ export function FormularioLogin({ admins }: { admins: Admin[] }) {
         <p className="text-sm text-stone-500">Hola, {elegido.nombre}</p>
         <p className="font-semibold text-stone-900">Ingresá tu PIN</p>
       </div>
+
+      {elegido.tienePin ? null : (
+        <Mensaje tipo="error">
+          Todavía no tenés un PIN. Entrá con tu contraseña y cargate uno desde Usuarios.
+        </Mensaje>
+      )}
 
       <TecladoPin valor={pin} onCambiar={cambiarPin} largo={LARGO_PIN} disabled={entrando} />
 

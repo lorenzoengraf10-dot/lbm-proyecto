@@ -65,5 +65,11 @@ export interface ComercioImportRow {
   codigo: string;
   nombre: string;
   localidad: string;
-  telefono?: string;
+  /**
+   * null cuando la fila no trae teléfono, nunca ausente: PostgREST arma el
+   * insert con las columnas del PRIMER objeto del lote, así que si a esa fila
+   * le faltaba la clave, los teléfonos de todas las demás se perdían en
+   * silencio.
+   */
+  telefono: string | null;
 }

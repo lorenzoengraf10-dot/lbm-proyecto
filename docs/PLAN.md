@@ -366,3 +366,20 @@ El archivo se parsea **siempre en el servidor**, también al previsualizar: la p
 ### Un error que estaba tapado
 
 Al tocar `packages/shared` salió que su `typecheck` venía **fallando desde el commit del login por PIN**: `derivarPassword` usa `crypto.subtle` y `TextEncoder`, que son globales en el navegador y en Node pero cuyos tipos viven en `lib.dom`, y el tsconfig de ese paquete solo cargaba `ES2022`. No rompía nada en producción —las dos apps compilan con su propio tsconfig, que sí incluye DOM— pero dejaba el chequeo del repo en rojo. Se me pasó por filtrar la salida de `pnpm typecheck` con `tail`, que se comió el error. Conviene mirar la salida completa, o filtrar por `error TS` en vez de por las últimas líneas.
+
+### Correcciones de la revisión
+
+**Los teléfonos se perdían en silencio.** Si el primer comercio del Excel no tenía teléfono, ninguno de los demás lo guardaba. PostgREST arma el `insert` de un lote con las columnas del **primer** objeto del arreglo, y las filas sin teléfono no traían esa clave. Ahora `telefono` va siempre, con `null` cuando no hay. Es el tipo de error que no se nota hasta que alguien busca un teléfono y no está.
+
+**Nadie sabía a quién le faltaba el PIN.** Con el login por PIN, un repartidor al que todavía no se le cargó uno veía "PIN incorrecto" y no entendía por qué no entraba; el dueño tampoco tenía forma de ver a quién le faltaba. Como la contraseña que guarda Auth es opaca, la app no puede distinguir "lo escribió mal" de "no tiene ninguno". Se agregó `usuarios.pin_fijado_en` —solo la fecha, nada del PIN— y con eso:
+
+- La pantalla de entrada lo dice: *"Todavía no tenés un PIN. Pedile al dueño que te lo cargue."*
+- La lista de nombres marca a los que están sin PIN.
+- En Usuarios del panel aparece una etiqueta **Sin PIN**, para ver de un vistazo qué cuentas todavía no pueden entrar.
+- Generar una contraseña nueva borra la marca, porque esa contraseña reemplaza al PIN.
+
+Esto importaba sobre todo para el despliegue: las cuentas que ya existían quedaron sin PIN, y sin el aviso el repartidor se habría quedado afuera sin entender nada.
+
+**La salida por contraseña del panel no estaba a mano.** Solo aparecía después de elegirse a uno mismo. Siendo el único camino que queda si el dueño pierde el PIN, ahora está también en la pantalla de elegir nombre.
+
+Y una del entorno: un build interrumpido dejó `.next` a medias —el HTML pedía un chunk que no existía en disco— y la app cargaba sin JavaScript, así que todo parecía roto sin ningún error en el servidor. Ante un comportamiento así, `rm -rf .next` y reconstruir antes de buscar el bug en el código.

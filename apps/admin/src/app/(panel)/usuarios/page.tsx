@@ -11,7 +11,7 @@ export default async function PaginaUsuarios() {
 
   const { data: usuarios, error } = await supabase
     .from("usuarios")
-    .select("id, nombre, username, rol, comision_pct, activo")
+    .select("id, nombre, username, rol, comision_pct, activo, pin_fijado_en")
     .order("rol")
     .order("nombre");
 
@@ -55,7 +55,21 @@ export default async function PaginaUsuarios() {
               celda: (usuario) =>
                 usuario.rol === "vendedor" ? formatearComision(usuario.comision_pct) : "—",
             },
-            { encabezado: "Estado", celda: (usuario) => <Etiqueta activo={usuario.activo} /> },
+            {
+              encabezado: "Estado",
+              celda: (usuario) => (
+                <span className="flex flex-wrap items-center gap-1">
+                  <Etiqueta activo={usuario.activo} />
+                  {/* Sin PIN no puede entrar: es lo primero que hay que saber
+                      de una cuenta recién creada. */}
+                  {usuario.pin_fijado_en ? null : (
+                    <span className="inline-flex whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                      Sin PIN
+                    </span>
+                  )}
+                </span>
+              ),
+            },
             {
               encabezado: "Acciones",
               soloEscritorio: true,

@@ -19,6 +19,8 @@ export interface EstadoLogin {
 export interface Repartidor {
   id: string;
   nombre: string;
+  /** false = el dueño todavía no le cargó el PIN, así que no puede entrar. */
+  tienePin: boolean;
 }
 
 /**
@@ -32,11 +34,15 @@ export async function listarRepartidores(): Promise<Repartidor[]> {
   const admin = crearClienteServiceRole();
   const { data } = await admin
     .from("usuarios")
-    .select("id, nombre")
+    .select("id, nombre, pin_fijado_en")
     .eq("rol", "vendedor")
     .eq("activo", true)
     .order("nombre");
-  return data ?? [];
+  return (data ?? []).map(({ id, nombre, pin_fijado_en }) => ({
+    id,
+    nombre,
+    tienePin: pin_fijado_en !== null,
+  }));
 }
 
 /**
@@ -54,7 +60,7 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
 
   const { data: usuario } = await admin
     .from("usuarios")
-    .select("id, username, rol, activo")
+    .select("id, username, rol, activo, pin_fijado_en")
     .eq("id", id)
     .maybeSingle();
 
@@ -62,6 +68,12 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
   // podría averiguar qué ids son válidos probando.
   if (!usuario || usuario.rol !== "vendedor" || !usuario.activo) {
     return { error: "PIN incorrecto." };
+  }
+
+  // Sin PIN cargado no hay nada contra qué comparar: decirlo evita que el
+  // repartidor siga probando números que nunca van a andar.
+  if (!usuario.pin_fijado_en) {
+    return { error: "Todavía no tenés un PIN. Pedile al dueño que te lo cargue." };
   }
 
   const { data: intentos } = await admin

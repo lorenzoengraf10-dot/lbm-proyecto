@@ -124,6 +124,12 @@ export async function resetearCredencial(
 
   if (error) return fallo(`No se pudo resetear la credencial: ${error.message}`);
 
+  // La contraseña nueva reemplaza al PIN: es la misma credencial. Se borra la
+  // marca para que la pantalla lo diga en vez de repetir "PIN incorrecto".
+  await admin.from("usuarios").update({ pin_fijado_en: null }).eq("id", id);
+  revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${id}`);
+
   return {
     error: null,
     ok: "Credencial nueva generada.",
@@ -306,8 +312,15 @@ export async function fijarPin(
   if (error) return fallo(`No se pudo guardar el PIN: ${error.message}`);
 
   // Un PIN nuevo borra el bloqueo por intentos fallidos: si se lo cambiaste es
-  // justamente porque no podía entrar.
-  await admin.from("intentos_pin").delete().eq("usuario_id", id);
+  // justamente porque no podía entrar. Y queda anotado que ya tiene uno, para
+  // poder avisarle si intenta entrar sin haberlo recibido.
+  await Promise.all([
+    admin.from("intentos_pin").delete().eq("usuario_id", id),
+    admin.from("usuarios").update({ pin_fijado_en: new Date().toISOString() }).eq("id", id),
+  ]);
+
+  revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${id}`);
 
   return {
     error: null,

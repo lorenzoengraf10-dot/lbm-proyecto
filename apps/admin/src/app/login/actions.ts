@@ -61,15 +61,21 @@ export async function iniciarSesion(
  * Igual que en la app del repartidor, es lo único que el panel cuenta antes
  * de autenticar.
  */
-export async function listarAdmins(): Promise<{ id: string; nombre: string }[]> {
+export async function listarAdmins(): Promise<
+  { id: string; nombre: string; tienePin: boolean }[]
+> {
   const admin = crearClienteServiceRole();
   const { data } = await admin
     .from("usuarios")
-    .select("id, nombre")
+    .select("id, nombre, pin_fijado_en")
     .eq("rol", "admin")
     .eq("activo", true)
     .order("nombre");
-  return data ?? [];
+  return (data ?? []).map(({ id, nombre, pin_fijado_en }) => ({
+    id,
+    nombre,
+    tienePin: pin_fijado_en !== null,
+  }));
 }
 
 /**
@@ -88,13 +94,17 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
 
   const { data: usuario } = await admin
     .from("usuarios")
-    .select("id, username, rol, activo")
+    .select("id, username, rol, activo, pin_fijado_en")
     .eq("id", id)
     .maybeSingle();
 
   // Mismo mensaje que un PIN equivocado, para no revelar qué ids existen.
   if (!usuario || usuario.rol !== "admin" || !usuario.activo) {
     return { error: "PIN incorrecto." };
+  }
+
+  if (!usuario.pin_fijado_en) {
+    return { error: "Todavía no tenés un PIN. Entrá con tu contraseña y cargate uno." };
   }
 
   const { data: intentos } = await admin

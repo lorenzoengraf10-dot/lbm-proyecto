@@ -88,6 +88,11 @@ export function FormularioLogin({ repartidores }: { repartidores: Repartidor[] }
                 className={`w-full ${estilos.botonSecundario} py-3 text-base`}
               >
                 {repartidor.nombre}
+                {repartidor.tienePin ? null : (
+                  <span className="block text-xs font-normal text-stone-500">
+                    todavía sin PIN
+                  </span>
+                )}
               </button>
             ))
           )}
@@ -102,6 +107,12 @@ export function FormularioLogin({ repartidores }: { repartidores: Repartidor[] }
         <p className="text-sm text-stone-500">Hola, {elegido.nombre}</p>
         <h1 className="text-lg font-semibold text-stone-900">Ingresá tu PIN</h1>
       </div>
+
+      {elegido.tienePin ? null : (
+        <Mensaje tipo="error">
+          Todavía no tenés un PIN. Pedile al dueño que te lo cargue desde el panel.
+        </Mensaje>
+      )}
 
       <TecladoPin valor={pin} onCambiar={cambiarPin} largo={LARGO_PIN} disabled={entrando} />
 
