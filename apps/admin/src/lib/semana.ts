@@ -1,4 +1,4 @@
-import { OFFSET_ARGENTINA, diaArgentina } from "./fechas";
+import { OFFSET_ARGENTINA, diaArgentina, diaValido, sumarDias } from "./fechas";
 
 // La semana del negocio es lunes a domingo en huso Argentina (docs/PLAN.md,
 // punto 6 de las ambigüedades).
@@ -12,12 +12,6 @@ export interface Semana {
   desdeIso: string;
   /** Instante exacto del lunes siguiente 00:00 Argentina, en ISO (exclusivo). */
   hastaIso: string;
-}
-
-function sumarDias(dia: string, dias: number): string {
-  const fecha = new Date(`${dia}T12:00:00Z`);
-  fecha.setUTCDate(fecha.getUTCDate() + dias);
-  return fecha.toISOString().slice(0, 10);
 }
 
 /** Lunes de la semana a la que pertenece el día dado (YYYY-MM-DD). */
@@ -44,13 +38,10 @@ export function semanaActual(): Semana {
 // La semana viaja en la URL (?semana=2026-09-07), así que puede llegar
 // cualquier cosa. Sin validar, un valor raro reventaba en "Invalid time
 // value" y tanto la pantalla del reporte como la descarga del PDF se caían.
-const FORMATO_DIA = /^\d{4}-\d{2}-\d{2}$/;
 
 /** La semana a la que pertenece el día dado. null si el día no sirve. */
 export function semanaDeDia(dia: string): Semana | null {
-  if (!FORMATO_DIA.test(dia)) return null;
-  if (Number.isNaN(new Date(`${dia}T12:00:00Z`).getTime())) return null;
-  return semanaDesdeLunes(lunesDe(dia));
+  return diaValido(dia) ? semanaDesdeLunes(lunesDe(dia)) : null;
 }
 
 /** Las últimas N semanas, de la más reciente a la más vieja. */

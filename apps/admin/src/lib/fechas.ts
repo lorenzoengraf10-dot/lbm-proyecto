@@ -31,6 +31,37 @@ export function rangoDelDia(dia: string): { desdeIso: string; hastaIso: string }
   };
 }
 
+// El día viaja en la URL (?dia=2026-09-13), así que puede llegar cualquier
+// cosa: un enlace viejo, un pegado a medias. Sin validar, un valor raro
+// termina en "Invalid time value" y tumba la pantalla entera con un 500.
+const FORMATO_DIA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** El día tal cual si sirve como YYYY-MM-DD, o null. */
+export function diaValido(dia: string | undefined | null): string | null {
+  if (!dia || !FORMATO_DIA.test(dia)) return null;
+  return Number.isNaN(new Date(`${dia}T12:00:00Z`).getTime()) ? null : dia;
+}
+
+const formatoDiaLargo = new Intl.DateTimeFormat("es-AR", {
+  timeZone: "America/Argentina/Buenos_Aires",
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+/** "domingo, 13 de septiembre de 2026" */
+export function etiquetaDiaLargo(dia: string): string {
+  return formatoDiaLargo.format(new Date(`${dia}T12:00:00Z`));
+}
+
+/** Suma (o resta) días a un YYYY-MM-DD sin que el huso mueva la fecha. */
+export function sumarDias(dia: string, dias: number): string {
+  const fecha = new Date(`${dia}T12:00:00Z`);
+  fecha.setUTCDate(fecha.getUTCDate() + dias);
+  return fecha.toISOString().slice(0, 10);
+}
+
 export interface Mes {
   /** "YYYY-MM", lo que viaja en la URL. */
   valor: string;

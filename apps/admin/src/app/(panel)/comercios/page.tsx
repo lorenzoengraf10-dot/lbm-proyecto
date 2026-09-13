@@ -36,6 +36,9 @@ export default async function PaginaComercios({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-stone-900">Comercios</h1>
         <div className="flex gap-2">
+          <Link href="/comercios/exportar" className={estilos.botonSecundario}>
+            Exportar a Excel
+          </Link>
           <Link href="/comercios/imprimir-qr" className={estilos.botonSecundario}>
             QR para imprimir
           </Link>

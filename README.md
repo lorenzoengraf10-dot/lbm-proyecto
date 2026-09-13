@@ -109,6 +109,27 @@ La **localidad** se carga una sola vez en la pantalla y vale para todo el archiv
 
 Antes de guardar nada se muestra una previsualización con lo que va a entrar y qué filas se saltean y por qué.
 
+## Planilla del día en Excel
+
+**Comercios → Exportar a Excel.** Una fila por comercio (código y nombre, uno al lado del otro) y una columna por producto con el kilaje que pidió ese día:
+
+| Código | Comercio | Aceitunas verdes (kg) | Bondiola ahumada (kg) | Total kg | Total $ |
+|---|---|---|---|---|---|
+| CP1 | Almacén Don José | 2,5 | 2,5 | 5 | $ 25.000,00 |
+| CP2 | Autoservicio La Esquina | 2,5 | 2,5 | 5 | $ 25.000,00 |
+| CP4 | Almacén Belgrano | | | | |
+| | **Total del día** | **7,5** | **7,5** | **15** | **$ 75.000,00** |
+
+El día se elige arriba (con atajos a *Hoy* y *Ayer*) y la pantalla muestra la misma tabla antes de bajar el archivo. Salen **todos** los comercios activos, así también se ve de un vistazo quién no pidió; *Mostrar solo los que pidieron* deja nada más los del día.
+
+Detalles que importan al usarla:
+
+- Las **columnas son solo los productos que se pidieron ese día**, no el catálogo entero: si no, la planilla se llenaría de columnas vacías.
+- El que no pidió queda con la **celda vacía, no en cero** — un cero se lee como "pidió cero".
+- Los kilos van como número pelado (la unidad está en el título de la columna), así se pueden sumar en Excel sin tocar nada. Los encabezados quedan fijos al scrollear y traen filtro.
+- Si un comercio hizo **más de un pedido en el mismo día**, se suman: para preparar interesa el total.
+- **Total kg** suma solo lo que se vende por kilo; si algún producto va por unidad, queda en su columna pero no se suma ahí.
+
 ## QR de los comercios
 
 Cada comercio tiene su cartel de 7×9 cm con el QR, el código y el nombre:
