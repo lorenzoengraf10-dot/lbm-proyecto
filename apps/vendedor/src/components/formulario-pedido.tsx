@@ -20,6 +20,7 @@ export function FormularioPedido({
   textoBoton,
   destino,
   onGuardar,
+  onSinPedido,
 }: {
   productos: ProductoCatalogo[];
   /** Para editar: cantidades ya cargadas, por id de producto. */
@@ -30,15 +31,26 @@ export function FormularioPedido({
   /** A dónde ir después de guardar. Si no se pasa, la pantalla se encarga. */
   destino?: string;
   onGuardar: (items: ItemPedido[]) => Promise<{ error: string | null }>;
+  /** Registrar la visita sin pedido. Va acá adentro porque sólo este componente
+   * sabe si hay cantidades cargadas que se perderían. */
+  onSinPedido?: () => void;
 }) {
   const router = useRouter();
   const [cantidades, setCantidades] = useState<Record<string, string>>(cantidadesIniciales ?? {});
   const [error, setError] = useState<string | null>(null);
   const [pendiente, iniciarTransicion] = useTransition();
 
+  // Del último pedido solo se puede repetir lo que sigue en el catálogo: si el
+  // dueño dio de baja un producto, esa línea ya no existe. Se cuenta aparte
+  // para poder decirlo — prometer "repetir 5" y cargar 4 en silencio haría que
+  // el repartidor confirme creyendo que está todo.
+  const enCatalogo = new Set(productos.map((producto) => producto.id));
+  const repetibles = (ultimoPedido ?? []).filter((item) => enCatalogo.has(item.producto_id));
+  const dadosDeBaja = (ultimoPedido ?? []).length - repetibles.length;
+
   // Lo que este comercio lleva siempre va primero: con casi veinte productos,
   // encontrar los cinco de siempre era scrollear toda la lista cada vez.
-  const habituales = new Set((ultimoPedido ?? []).map((item) => item.producto_id));
+  const habituales = new Set(repetibles.map((item) => item.producto_id));
   const ordenados =
     habituales.size === 0
       ? productos
@@ -48,9 +60,8 @@ export function FormularioPedido({
         ];
 
   function repetirUltimo() {
-    if (!ultimoPedido) return;
     setCantidades(
-      Object.fromEntries(ultimoPedido.map((item) => [item.producto_id, String(item.cantidad)]))
+      Object.fromEntries(repetibles.map((item) => [item.producto_id, String(item.cantidad)]))
     );
   }
 
@@ -85,15 +96,24 @@ export function FormularioPedido({
     <div className={`${estilos.tarjeta} space-y-3 p-4`}>
       {/* Repetir lo de la vez pasada resuelve la mayoría de los pedidos de un
           toque: los comercios piden casi siempre lo mismo. */}
-      {ultimoPedido && ultimoPedido.length > 0 ? (
-        <button
-          type="button"
-          onClick={repetirUltimo}
-          className={`w-full ${estilos.botonSecundario} py-2.5`}
-        >
-          Repetir lo de la vez pasada ({ultimoPedido.length}{" "}
-          {ultimoPedido.length === 1 ? "producto" : "productos"})
-        </button>
+      {repetibles.length > 0 ? (
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={repetirUltimo}
+            className={`w-full ${estilos.botonSecundario} py-2.5`}
+          >
+            Repetir lo de la vez pasada ({repetibles.length}{" "}
+            {repetibles.length === 1 ? "producto" : "productos"})
+          </button>
+          {dadosDeBaja > 0 ? (
+            <p className="text-center text-xs text-stone-500">
+              {dadosDeBaja === 1
+                ? "Otro producto de ese pedido ya no está en el catálogo."
+                : `Otros ${dadosDeBaja} productos de ese pedido ya no están en el catálogo.`}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {productos.length === 0 ? (
@@ -144,6 +164,24 @@ export function FormularioPedido({
       >
         {pendiente ? "Guardando…" : textoBoton}
       </button>
+
+      {onSinPedido ? (
+        <button
+          type="button"
+          disabled={pendiente}
+          onClick={() => {
+            // Con cantidades ya escritas, tocar esto de más se llevaría el
+            // pedido puesto sin dejar rastro: mejor preguntar.
+            if (items.length > 0 && !confirm("Cargaste productos y se van a perder. ¿Registrar la visita sin pedido igual?")) {
+              return;
+            }
+            onSinPedido();
+          }}
+          className="w-full py-1 text-center text-sm text-stone-500 underline"
+        >
+          Pasé pero no me pidió nada
+        </button>
+      ) : null}
     </div>
   );
 }

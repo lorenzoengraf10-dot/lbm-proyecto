@@ -16,14 +16,13 @@ export default function PaginaComercios() {
     useDatosLocales();
 
   const [busqueda, setBusqueda] = useState("");
-  const [seleccion, setSeleccion] = useState<{ id: string; conPedido: boolean } | null>(null);
+  const [seleccion, setSeleccion] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 
   // Si se llegó desde el escáner, ese comercio manda hasta que se elija otra
   // cosa. Se deriva en el render en vez de copiarlo a estado con un efecto.
-  const elegido =
-    seleccion ?? (comercioRecienEscaneado ? { id: comercioRecienEscaneado, conPedido: true } : null);
-  const comercio = comercios.find((c) => c.id === elegido?.id) ?? null;
+  const elegido = seleccion ?? comercioRecienEscaneado;
+  const comercio = comercios.find((c) => c.id === elegido) ?? null;
 
   function volverAlListado() {
     setSeleccion(null);
@@ -123,23 +122,17 @@ export default function PaginaComercios() {
           </p>
         </div>
 
+        {/* Pasar sin pedido es la excepción, no una opción al mismo nivel: va al
+            pie del formulario, que además es el único que sabe si hay
+            cantidades cargadas que se perderían. */}
         <FormularioPedido
           productos={productos}
           ultimoPedido={ultimosPedidos[comercio.id]}
           textoBoton="Confirmar pedido"
           destino=""
           onGuardar={guardarPedido}
+          onSinPedido={() => void registrarSoloVisita()}
         />
-
-        {/* Pasar sin pedido es la excepción, no una opción al mismo nivel: va
-            abajo de todo y como enlace, para que no compita con el formulario. */}
-        <button
-          type="button"
-          onClick={() => void registrarSoloVisita()}
-          className="w-full py-2 text-center text-sm text-stone-500 underline"
-        >
-          Pasé pero no me pidió nada
-        </button>
       </>
     );
   }
@@ -178,7 +171,7 @@ export default function PaginaComercios() {
                 // se le va a cargar un pedido. Antes había una pantalla en el
                 // medio que preguntaba qué hacer, y era un toque de más en lo
                 // único que el repartidor hace todo el día.
-                setSeleccion({ id: c.id, conPedido: true });
+                setSeleccion(c.id);
               }}
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-stone-50"
             >
