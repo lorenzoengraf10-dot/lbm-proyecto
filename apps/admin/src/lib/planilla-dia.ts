@@ -1,13 +1,26 @@
 import { ordenarPorCodigo } from "@lbm/shared";
+import { abreviarNombres } from "./abreviar";
 import type { SesionAdmin } from "./auth";
 import { rangoDelDia } from "./fechas";
 import { ITEMS_ANIDADOS, itemsDe } from "./reporte-semanal";
+import { claveUnidad, ordenarUnidades, unidadCorta } from "./unidades";
 
 /** Una columna de la planilla: un producto que se pidió ese día. */
 export interface ProductoColumna {
   id: string;
+  /** Como está en el catálogo. */
   nombre: string;
+  /** Corto, para que el encabezado no estire la columna. */
+  corto: string;
+  /** "kg", "un.", "doc." */
   unidad: string;
+  /** Para agrupar los totales: todo lo que se vende igual suma junto. */
+  clave: string;
+}
+
+export interface UnidadDeTotal {
+  clave: string;
+  corta: string;
 }
 
 export interface FilaPlanilla {
@@ -17,8 +30,8 @@ export interface FilaPlanilla {
   activo: boolean;
   /** Cuánto pidió de cada producto, por id. Sin la clave = no pidió ese producto. */
   cantidades: Record<string, number>;
-  /** Suma de lo que se vende por kilo. Lo que va por unidad no entra acá. */
-  totalKg: number;
+  /** Cuánto suma por unidad: los kilos con los kilos, las unidades con las unidades. */
+  totales: Record<string, number>;
   totalPesos: number;
   pidio: boolean;
 }
@@ -26,14 +39,15 @@ export interface FilaPlanilla {
 export interface PlanillaDia {
   dia: string;
   productos: ProductoColumna[];
+  /** Las unidades que aparecen ese día: una columna de total por cada una. */
+  unidades: UnidadDeTotal[];
   filas: FilaPlanilla[];
   /** Cuánto hay que preparar de cada producto en todo el día, por id. */
   porProducto: Record<string, number>;
-  totalKg: number;
+  /** El total del día por unidad. */
+  totales: Record<string, number>;
   totalPesos: number;
   cuantosPidieron: number;
-  /** Hay algo que no se vende por kilo: el total en kg no cuenta todo. */
-  hayOtrasUnidades: boolean;
 }
 
 /**
@@ -79,18 +93,31 @@ export async function armarPlanillaDia(
   // Las columnas son solo los productos que se pidieron ese día: poner todo el
   // catálogo llenaría la planilla de columnas vacías.
   const pedidosDelDia = new Set(itemsDe(pedidos).map((item) => item.producto_id));
-  const columnas: ProductoColumna[] = (productos ?? [])
+  const delDia = (productos ?? [])
     .filter((producto) => pedidosDelDia.has(producto.id))
-    .map((producto) => ({
-      id: producto.id,
-      nombre: producto.nombre,
-      unidad: producto.unidad_medida,
-    }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
-  const porKilo = new Set(
-    columnas.filter((columna) => esKilo(columna.unidad)).map((columna) => columna.id)
-  );
+  // Se abrevian contra el catálogo entero, no contra los productos del día:
+  // si no, "Salame" podría ser el picado fino en la planilla del lunes y el
+  // tipo milán en la del martes, y comparar dos hojas impresas engañaría.
+  const cortos = abreviarNombres((productos ?? []).map((producto) => producto.nombre));
+
+  const columnas: ProductoColumna[] = delDia.map((producto) => ({
+    id: producto.id,
+    nombre: producto.nombre,
+    corto: cortos.get(producto.nombre) ?? producto.nombre,
+    unidad: unidadCorta(producto.unidad_medida),
+    clave: claveUnidad(producto.unidad_medida),
+  }));
+
+  // Una columna de total por cada unidad que aparezca: los kilos no se pueden
+  // sumar con las unidades, y el dueño necesita los dos números.
+  const unidades: UnidadDeTotal[] = ordenarUnidades([
+    ...new Set(columnas.map((columna) => columna.clave)),
+  ]).map((clave) => ({
+    clave,
+    corta: columnas.find((columna) => columna.clave === clave)?.unidad ?? clave,
+  }));
 
   // Todos los comercios activos, más cualquiera que haya pedido ese día aunque
   // después lo hayan dado de baja: si pidió, tiene que estar en la planilla.
@@ -98,20 +125,24 @@ export async function armarPlanillaDia(
     (comercio) => comercio.activo || porComercio.has(comercio.id)
   );
 
+  const unidadDeProducto = new Map(columnas.map((columna) => [columna.id, columna.clave]));
+
   const filas: FilaPlanilla[] = ordenarPorCodigo(visibles)
     .map((comercio) => {
       const resumen = porComercio.get(comercio.id);
       const cantidades = Object.fromEntries(resumen?.cantidades ?? []);
+      const totales: Record<string, number> = {};
+      for (const [productoId, cantidad] of Object.entries(cantidades)) {
+        const clave = unidadDeProducto.get(productoId);
+        if (clave) totales[clave] = (totales[clave] ?? 0) + cantidad;
+      }
       return {
         id: comercio.id,
         codigo: comercio.codigo,
         nombre: comercio.nombre,
         activo: comercio.activo,
         cantidades,
-        totalKg: Object.entries(cantidades).reduce(
-          (total, [productoId, cantidad]) => total + (porKilo.has(productoId) ? cantidad : 0),
-          0
-        ),
+        totales,
         totalPesos: resumen?.pesos ?? 0,
         pidio: resumen !== undefined,
       };
@@ -126,20 +157,22 @@ export async function armarPlanillaDia(
     );
   }
 
+  const totales: Record<string, number> = {};
+  for (const unidad of unidades) {
+    totales[unidad.clave] = filas.reduce(
+      (total, fila) => total + (fila.totales[unidad.clave] ?? 0),
+      0
+    );
+  }
+
   return {
     dia,
     productos: columnas,
+    unidades,
     filas,
     porProducto,
-    totalKg: filas.reduce((total, fila) => total + fila.totalKg, 0),
+    totales,
     totalPesos: filas.reduce((total, fila) => total + fila.totalPesos, 0),
     cuantosPidieron: filas.filter((fila) => fila.pidio).length,
-    hayOtrasUnidades: columnas.some((columna) => !esKilo(columna.unidad)),
   };
-}
-
-/** El catálogo es casi todo por kilo, pero puede haber algo por unidad o docena. */
-function esKilo(unidad: string): boolean {
-  const limpia = unidad.trim().toLowerCase();
-  return limpia === "kg" || limpia === "kilo" || limpia === "kilos" || limpia === "kilogramo";
 }

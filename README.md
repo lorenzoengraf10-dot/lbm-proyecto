@@ -111,24 +111,34 @@ Antes de guardar nada se muestra una previsualización con lo que va a entrar y 
 
 ## Planilla del día en Excel
 
-**Comercios → Exportar a Excel.** Una fila por comercio (código y nombre, uno al lado del otro) y una columna por producto con el kilaje que pidió ese día:
+**Comercios → Exportar a Excel.** Una fila por comercio (código y nombre, uno al lado del otro) y una columna por producto con la cantidad que pidió ese día:
 
-| Código | Comercio | Aceitunas verdes (kg) | Bondiola ahumada (kg) | Total kg | Total $ |
-|---|---|---|---|---|---|
-| CP1 | Almacén Don José | 2,5 | 2,5 | 5 | $ 25.000,00 |
-| CP2 | Autoservicio La Esquina | 2,5 | 2,5 | 5 | $ 25.000,00 |
-| CP4 | Almacén Belgrano | | | | |
-| | **Total del día** | **7,5** | **7,5** | **15** | **$ 75.000,00** |
+| Código | Comercio | Aceitunas (kg) | Huevos (doc.) | Manteca (un.) | Total kg | Total doc. | Total un. | Total $ |
+|---|---|---|---|---|---|---|---|---|
+| CP1 | Almacén Don José | 6,5 | 2 | 5 | 28 | 2 | 5 | $ 165.450,00 |
+| CP2 | Autoservicio La Esquina | 2,5 | | | 5 | | | $ 25.000,00 |
+| CP4 | Almacén Belgrano | | | | | | | |
+| | **Total del día** | **18,5** | **20** | **22** | **127** | **20** | **22** | **$ 980.400,00** |
 
 El día se elige arriba (con atajos a *Hoy* y *Ayer*) y la pantalla muestra la misma tabla antes de bajar el archivo. Salen **todos** los comercios activos, así también se ve de un vistazo quién no pidió; *Mostrar solo los que pidieron* deja nada más los del día.
 
-Detalles que importan al usarla:
+### Cada unidad lleva su propio total
+
+Un kilo y una docena no se pueden sumar juntos, así que hay **una columna de total por cada unidad** que se haya pedido ese día: `Total kg`, `Total doc.`, `Total un.`. La unidad de cada producto sale del catálogo y se reconoce escrita de cualquier forma (`unidad`, `Unidades`, `un`, todas cuentan como la misma).
+
+### Pensada para imprimirse
+
+- **A4 apaisado**, todo el ancho en una sola hoja y tantas hojas de alto como haga falta, con los encabezados repetidos arriba de cada página.
+- Los **nombres de los productos van abreviados** para que la hoja no se estire: *Bondiola ahumada* → `Bondiola`, *Queso rallado sachet* → `Queso sachet`. Se acorta lo mínimo necesario, así que si hay dos que empiezan igual se mantiene lo que los distingue (`Salame fino` y `Salame grueso`, no dos `Salame`). Las abreviaturas se calculan sobre el **catálogo entero**, no sobre los productos del día: si no, `Salame` podría ser uno el lunes y otro el martes. Al pie de la hoja va la línea de referencias con el nombre completo de cada uno.
+- Con **seis productos o más** los títulos se imprimen **de costado**: es lo único que hace entrar quince o veinte columnas a lo ancho de un A4. Con menos, van derechos, que se leen mejor.
+
+### Detalles que importan al usarla
 
 - Las **columnas son solo los productos que se pidieron ese día**, no el catálogo entero: si no, la planilla se llenaría de columnas vacías.
 - El que no pidió queda con la **celda vacía, no en cero** — un cero se lee como "pidió cero".
-- Los kilos van como número pelado (la unidad está en el título de la columna), así se pueden sumar en Excel sin tocar nada. Los encabezados quedan fijos al scrollear y traen filtro.
+- Las cantidades van como número pelado (la unidad está en el título de la columna), así se pueden sumar en Excel sin tocar nada. Los encabezados quedan fijos al scrollear y traen filtro.
 - Si un comercio hizo **más de un pedido en el mismo día**, se suman: para preparar interesa el total.
-- **Total kg** suma solo lo que se vende por kilo; si algún producto va por unidad, queda en su columna pero no se suma ahí.
+- Un comercio dado de baja que igual pidió ese día aparece, marcado como tal.
 
 ## QR de los comercios
 

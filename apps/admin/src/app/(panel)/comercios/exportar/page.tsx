@@ -19,6 +19,7 @@ export default async function PaginaExportar({
   const soloQuePidieron = solo === "1";
 
   const planilla = await armarPlanillaDia(supabase, dia, soloQuePidieron);
+  const acortados = planilla.productos.filter((producto) => producto.corto !== producto.nombre);
 
   const enlaceExcel = `/comercios/exportar/excel?dia=${dia}${soloQuePidieron ? "&solo=1" : ""}`;
   const conFiltro = (cambios: { dia?: string; solo?: string }) => {
@@ -70,7 +71,9 @@ export default async function PaginaExportar({
         <p className="text-sm text-stone-500">
           {planilla.cuantosPidieron}{" "}
           {planilla.cuantosPidieron === 1 ? "comercio pidió" : "comercios pidieron"}
-          {planilla.totalKg > 0 ? ` · ${formatearCantidad(planilla.totalKg)} kg` : ""}
+          {planilla.unidades.map(
+            (unidad) => ` · ${formatearCantidad(planilla.totales[unidad.clave] ?? 0)} ${unidad.corta}`
+          )}
           {planilla.totalPesos > 0 ? ` · ${formatearPrecio(planilla.totalPesos)}` : ""}
         </p>
         <Link
@@ -99,18 +102,25 @@ export default async function PaginaExportar({
               </Link>
             ),
           },
+          // Los mismos nombres cortos que el Excel: lo que se ve acá es lo que
+          // se imprime.
           ...planilla.productos.map((producto) => ({
-            encabezado: `${producto.nombre} (${producto.unidad})`,
+            encabezado: `${producto.corto} (${producto.unidad})`,
             celda: (fila: FilaPlanilla) =>
               // Vacío y no "0": un cero se lee como "pidió cero".
               fila.cantidades[producto.id] !== undefined
                 ? formatearCantidad(fila.cantidades[producto.id])
                 : "",
           })),
-          {
-            encabezado: "Total kg",
-            celda: (fila) => (fila.pidio ? formatearCantidad(fila.totalKg) : ""),
-          },
+          // Una columna de total por unidad: los kilos no se pueden sumar con
+          // las unidades.
+          ...planilla.unidades.map((unidad) => ({
+            encabezado: `Total ${unidad.corta}`,
+            celda: (fila: FilaPlanilla) =>
+              fila.totales[unidad.clave] !== undefined
+                ? formatearCantidad(fila.totales[unidad.clave])
+                : "",
+          })),
           {
             encabezado: "Total",
             celda: (fila) => (fila.pidio ? formatearPrecio(fila.totalPesos) : ""),
@@ -118,18 +128,22 @@ export default async function PaginaExportar({
         ]}
         pie={[
           ...planilla.productos.map((producto) => ({
-            etiqueta: producto.nombre,
+            etiqueta: producto.corto,
             valor: formatearCantidad(planilla.porProducto[producto.id] ?? 0),
           })),
-          { etiqueta: "Total kg", valor: formatearCantidad(planilla.totalKg) },
+          ...planilla.unidades.map((unidad) => ({
+            etiqueta: `Total ${unidad.corta}`,
+            valor: formatearCantidad(planilla.totales[unidad.clave] ?? 0),
+          })),
           { etiqueta: "Total", valor: formatearPrecio(planilla.totalPesos) },
         ]}
       />
 
-      {planilla.hayOtrasUnidades ? (
+      {/* Los nombres que se acortaron, aclarados abajo: en el Excel impreso va
+          la misma línea. */}
+      {acortados.length > 0 ? (
         <p className="text-sm text-stone-500">
-          El total en kg suma solo lo que se vende por kilo. Lo que va por unidad queda en su
-          columna, pero no se suma ahí.
+          {acortados.map((producto) => `${producto.corto} = ${producto.nombre}`).join("  ·  ")}
         </p>
       ) : null}
     </>
