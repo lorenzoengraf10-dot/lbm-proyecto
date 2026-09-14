@@ -30,12 +30,6 @@ export async function excelPlanillaDia(planilla: PlanillaDia): Promise<ArrayBuff
   // El nombre de la hoja no admite / \ ? * [ ] y se corta a 31 caracteres.
   const hoja = libro.addWorksheet(`Pedidos ${planilla.dia.replaceAll("-", "")}`);
 
-  // Tantas celdas de pedido como productos pidió el que más pidió. Al menos
-  // una, para que la hoja de un día sin pedidos siga teniendo forma de tabla.
-  const celdasPedido = Math.max(1, planilla.maxLineas);
-  const primerPedido = 3;
-  const columnaPesos = primerPedido + celdasPedido;
-
   // Cada celda tiene que dar para el pedido más largo del día ("Queso cremoso
   // 2,5 kg"), sin pasarse: cada carácter de más es ancho que se le quita a la
   // hoja impresa.
@@ -45,9 +39,28 @@ export async function excelPlanillaDia(planilla: PlanillaDia): Promise<ArrayBuff
   );
   const anchoPedido = Math.min(22, Math.max(12, masLargo + 2));
 
+  // Cuántas celdas de pedido entran a lo ancho de un A4 apaisado.
+  //
+  // Poner una columna por producto del que más pidió parecía lo natural, pero
+  // un comercio que pide dieciocho productos hacía una hoja tan ancha que al
+  // imprimirla Excel la achicaba a la mitad y no se leía nada. Así que el
+  // ancho se fija y al que pidió de más se le sigue el pedido en el renglón
+  // de abajo. En caracteres: el A4 da para unos 150 a tamaño natural; con 185
+  // queda una reducción suave que todavía se lee bien.
+  const ANCHO_HOJA = 185;
+  const celdasPorFila = Math.max(
+    3,
+    Math.floor((ANCHO_HOJA - 8 - 26 - 13) / anchoPedido)
+  );
+  // No hacen falta más celdas que productos pidió el que más pidió. Al menos
+  // una, para que la hoja de un día sin pedidos siga teniendo forma de tabla.
+  const celdasPedido = Math.max(1, Math.min(celdasPorFila, planilla.maxLineas));
+  const primerPedido = 3;
+  const columnaPesos = primerPedido + celdasPedido;
+
   hoja.columns = [
     { key: "codigo", width: 8 },
-    { key: "nombre", width: 26 },
+    { key: "nombre", width: 28 },
     ...Array.from({ length: celdasPedido }, (_, i) => ({ key: `p${i}`, width: anchoPedido })),
     { key: "pesos", width: 13 },
   ];
@@ -82,14 +95,37 @@ export async function excelPlanillaDia(planilla: PlanillaDia): Promise<ArrayBuff
   }
 
   for (const fila of planilla.filas) {
-    const agregada = hoja.addRow([
-      fila.codigo,
-      fila.activo ? fila.nombre : `${fila.nombre} (dado de baja)`,
-      ...Array.from({ length: celdasPedido }, (_, i) => fila.lineas[i]?.texto ?? null),
-      // Vacío y no cero: un cero se lee como "compró por cero pesos".
-      fila.pidio ? fila.totalPesos : null,
-    ]);
-    agregada.getCell(columnaPesos).numFmt = FORMATO_PESOS;
+    // El pedido se parte en renglones de a celdasPedido: al que pidió mucho se
+    // le sigue abajo en vez de estirar la hoja.
+    const renglones = Math.max(1, Math.ceil(fila.lineas.length / celdasPedido));
+    for (let renglon = 0; renglon < renglones; renglon++) {
+      const desde = renglon * celdasPedido;
+      const primero = renglon === 0;
+      const agregada = hoja.addRow([
+        fila.codigo,
+        primero ? (fila.activo ? fila.nombre : `${fila.nombre} (dado de baja)`) : "",
+        ...Array.from({ length: celdasPedido }, (_, i) => fila.lineas[desde + i]?.texto ?? null),
+        // El total del comercio va en su primer renglón, y vacío si no pidió:
+        // un cero se lee como "compró por cero pesos".
+        primero && fila.pidio ? fila.totalPesos : null,
+      ]);
+      agregada.getCell(columnaPesos).numFmt = FORMATO_PESOS;
+      // El nombre se pliega en dos renglones si hace falta: "Almacén de Ramos
+      // Generales y Fiambrería del Puerto Viejo" no entra de una y, sin
+      // plegarlo, la celda del pedido de al lado se lo comía a la mitad.
+      agregada.getCell(2).alignment = { wrapText: true, vertical: "top" };
+      for (let columna = primerPedido; columna < columnaPesos; columna++) {
+        // shrinkToFit: si el dueño le puso una abreviatura larga, el texto se
+        // achica un poco en vez de salir cortado por la celda de al lado.
+        agregada.getCell(columna).alignment = { vertical: "top", shrinkToFit: true };
+      }
+      agregada.getCell(columnaPesos).alignment = { vertical: "top" };
+      if (!primero) {
+        // El código se repite apagado: si el corte de página cae justo acá,
+        // el renglón suelto igual se sabe de quién es.
+        agregada.getCell(1).font = { color: { argb: APAGADO } };
+      }
+    }
   }
 
   // ---- Lo que hay que preparar ----

@@ -129,7 +129,11 @@ Al cargar un producto, además del nombre y la unidad, hay un campo **Abreviatur
 
 Es opcional. Si se deja vacía, la planilla **acorta el nombre sola** (en gris en esa columna): saca las preposiciones y se queda con lo mínimo que distinga a ese producto de los demás, así que quedan `Salame fino` y `Salame grueso`, nunca dos `Salame`. El acortado automático se calcula sobre el **catálogo entero** y no sobre los productos del día: si no, `Salame` podría ser uno el lunes y otro el martes y comparar dos planillas impresas engañaría.
 
-Dos productos no pueden tener la misma abreviatura (da igual mayúsculas y minúsculas): sería una planilla donde no se sabe cuál es cuál, que es justo lo que la abreviatura tiene que evitar.
+Dos productos no pueden salir iguales en la planilla, que sería justo lo que la abreviatura tiene que evitar. Eso se cuida por tres lados (todo sin distinguir mayúsculas):
+
+- Dos productos no pueden tener la misma abreviatura.
+- Una abreviatura no puede ser el **nombre** de otro producto, ni al revés. Si existiera el producto "Mortadela" y a "Mortadela con pistacho" le pusieran de abreviatura "Mortadela", los dos saldrían igual y al de nombre corto no le quedaría nada más con qué distinguirse: no hay forma de arreglarlo al imprimir, así que se corta al guardar.
+- La abreviatura **automática** de un producto tampoco puede coincidir con la que el dueño cargó a mano para otro. La base no puede verlo (la automática no está guardada), así que lo resuelve la planilla: las cargadas a mano mandan y la automática se corre a su siguiente opción.
 
 ### Cada unidad lleva su propio total
 
@@ -138,6 +142,8 @@ Un kilo y una docena no se pueden sumar juntos. Cada celda del pedido trae su un
 ### Pensada para imprimirse
 
 - **A4 apaisado**, todo el ancho en una sola hoja y tantas hojas de alto como haga falta, con los encabezados repetidos arriba de cada página.
+- El ancho de la hoja **es fijo**: al comercio que pidió más productos de los que entran a lo ancho se le sigue el pedido en el renglón de abajo, con el código repetido en gris. Poner una columna por producto del que más pidió parecía lo natural, pero un pedido de dieciocho productos hacía una hoja tan ancha que al imprimirla Excel la achicaba a la mitad y no se leía nada.
+- El nombre del comercio se pliega en dos renglones si es largo, y una abreviatura larga se achica un poco en vez de salir cortada por la celda de al lado.
 - En el resumen de abajo, cada producto va con su nombre completo y, entre paréntesis, cómo aparece arriba: así el que mira la hoja impresa puede confirmar qué es cada abreviatura sin preguntarle a nadie.
 - El ancho de las celdas del pedido sale del pedido más largo del día: ni cortado ni con aire de más.
 

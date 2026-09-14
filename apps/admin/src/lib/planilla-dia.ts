@@ -81,7 +81,17 @@ export async function armarPlanillaDia(
   // dueño. Se calcula sobre el catálogo entero y no sobre los productos del
   // día, si no "Salame" podría ser uno el lunes y otro el martes y comparar
   // dos planillas impresas engañaría.
-  const automaticas = abreviarNombres((productos ?? []).map((producto) => producto.nombre));
+  const automaticas = abreviarNombres(
+    (productos ?? []).map((producto) => producto.nombre),
+    // Las que cargó el dueño quedan reservadas: la automática de un producto
+    // no puede salir igual que la escrita a mano de otro, o la hoja impresa
+    // tendría dos renglones que dicen lo mismo.
+    {
+      reservadas: (productos ?? [])
+        .map((producto) => producto.abreviatura)
+        .filter((abreviatura): abreviatura is string => Boolean(abreviatura)),
+    }
+  );
   const catalogo = new Map(
     (productos ?? []).map((producto) => [
       producto.id,

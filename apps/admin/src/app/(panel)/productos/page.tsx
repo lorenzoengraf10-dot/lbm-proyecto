@@ -18,7 +18,14 @@ export default async function PaginaProductos() {
 
   // La que se usaría si no se cargó ninguna: se muestra en gris para que se
   // vea cómo va a salir impreso sin tener que abrir la planilla.
-  const automaticas = abreviarNombres((productos ?? []).map((producto) => producto.nombre));
+  const automaticas = abreviarNombres(
+    (productos ?? []).map((producto) => producto.nombre),
+    {
+      reservadas: (productos ?? [])
+        .map((producto) => producto.abreviatura)
+        .filter((abreviatura): abreviatura is string => Boolean(abreviatura)),
+    }
+  );
 
   return (
     <>
