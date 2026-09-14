@@ -4,7 +4,7 @@ import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { diaArgentina, diaValido, etiquetaDiaLargo, sumarDias } from "@/lib/fechas";
 import { formatearCantidad, formatearPrecio } from "@/lib/formato";
-import { armarPlanillaDia, type FilaPlanilla } from "@/lib/planilla-dia";
+import { armarPlanillaDia } from "@/lib/planilla-dia";
 
 export default async function PaginaExportar({
   searchParams,
@@ -19,7 +19,6 @@ export default async function PaginaExportar({
   const soloQuePidieron = solo === "1";
 
   const planilla = await armarPlanillaDia(supabase, dia, soloQuePidieron);
-  const acortados = planilla.productos.filter((producto) => producto.corto !== producto.nombre);
 
   const enlaceExcel = `/comercios/exportar/excel?dia=${dia}${soloQuePidieron ? "&solo=1" : ""}`;
   const conFiltro = (cambios: { dia?: string; solo?: string }) => {
@@ -40,8 +39,8 @@ export default async function PaginaExportar({
       </div>
 
       <p className="text-sm text-stone-500">
-        Todos los comercios con lo que pidió cada uno ese día, una columna por producto. Sirve para
-        preparar a la mañana y para salir a repartir.
+        Todos los comercios con lo que pidió cada uno ese día, y abajo el total de lo que hay que
+        preparar. En el Excel cada producto va en su propia celda, listo para imprimir en una hoja.
       </p>
 
       <form className="flex flex-wrap items-end gap-3">
@@ -102,50 +101,62 @@ export default async function PaginaExportar({
               </Link>
             ),
           },
-          // Los mismos nombres cortos que el Excel: lo que se ve acá es lo que
-          // se imprime.
-          ...planilla.productos.map((producto) => ({
-            encabezado: `${producto.corto} (${producto.unidad})`,
-            celda: (fila: FilaPlanilla) =>
-              // Vacío y no "0": un cero se lee como "pidió cero".
-              fila.cantidades[producto.id] !== undefined
-                ? formatearCantidad(fila.cantidades[producto.id])
-                : "",
-          })),
-          // Una columna de total por unidad: los kilos no se pueden sumar con
-          // las unidades.
-          ...planilla.unidades.map((unidad) => ({
-            encabezado: `Total ${unidad.corta}`,
-            celda: (fila: FilaPlanilla) =>
-              fila.totales[unidad.clave] !== undefined
-                ? formatearCantidad(fila.totales[unidad.clave])
-                : "",
-          })),
+          {
+            encabezado: "Pedido",
+            // En pantalla van todos en una celda y en el Excel uno por celda:
+            // dice lo mismo, pero veinte columnas en un celular no se leen.
+            celda: (fila) =>
+              fila.lineas.length > 0 ? (
+                <span className="text-stone-700">
+                  {fila.lineas.map((linea) => linea.texto).join("  ·  ")}
+                </span>
+              ) : (
+                <span className="text-stone-400">—</span>
+              ),
+          },
           {
             encabezado: "Total",
             celda: (fila) => (fila.pidio ? formatearPrecio(fila.totalPesos) : ""),
           },
         ]}
-        pie={[
-          ...planilla.productos.map((producto) => ({
-            etiqueta: producto.corto,
-            valor: formatearCantidad(planilla.porProducto[producto.id] ?? 0),
-          })),
-          ...planilla.unidades.map((unidad) => ({
-            etiqueta: `Total ${unidad.corta}`,
-            valor: formatearCantidad(planilla.totales[unidad.clave] ?? 0),
-          })),
-          { etiqueta: "Total", valor: formatearPrecio(planilla.totalPesos) },
-        ]}
+        pie={[{ etiqueta: "Total", valor: formatearPrecio(planilla.totalPesos) }]}
       />
 
-      {/* Los nombres que se acortaron, aclarados abajo: en el Excel impreso va
-          la misma línea. */}
-      {acortados.length > 0 ? (
-        <p className="text-sm text-stone-500">
-          {acortados.map((producto) => `${producto.corto} = ${producto.nombre}`).join("  ·  ")}
-        </p>
+      {/* Lo que hay que preparar: el mismo resumen que va al pie del Excel, con
+          el nombre completo de cada producto (que de paso aclara qué quiere
+          decir cada abreviatura). */}
+      {planilla.preparar.length > 0 ? (
+        <div className="space-y-2">
+          <h2 className="text-base font-medium text-stone-900">Para preparar</h2>
+          <div className={`${estilos.tarjeta} divide-y divide-stone-100`}>
+            {planilla.preparar.map((linea) => (
+              <div key={linea.productoId} className="flex justify-between gap-3 px-4 py-2 text-sm">
+                <span className="text-stone-700">
+                  {linea.nombre}
+                  {linea.corto !== linea.nombre ? (
+                    <span className="ml-2 text-xs text-stone-400">{linea.corto}</span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 font-medium text-stone-900">
+                  {formatearCantidad(linea.cantidad)} {linea.unidad}
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between gap-3 bg-stone-50 px-4 py-2 text-sm font-semibold text-stone-900">
+              <span>Total</span>
+              <span>
+                {planilla.unidades
+                  .map(
+                    (unidad) =>
+                      `${formatearCantidad(planilla.totales[unidad.clave] ?? 0)} ${unidad.corta}`
+                  )
+                  .join(" · ")}
+              </span>
+            </div>
+          </div>
+        </div>
       ) : null}
+
     </>
   );
 }

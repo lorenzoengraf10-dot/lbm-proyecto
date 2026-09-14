@@ -6,11 +6,15 @@ import { requerirAdmin } from "@/lib/auth";
 import { exito, fallo, mensajeDeError, type EstadoFormulario } from "@/lib/formularios";
 
 const NOMBRE_DUPLICADO = "Ya existe un producto con ese nombre.";
+const ABREVIATURA_DUPLICADA = "Ya hay otro producto con esa abreviatura.";
+const LARGO_ABREVIATURA = 20;
 
 interface CamposProducto {
   nombre: string;
   precio: number;
   unidad_medida: string;
+  /** null = que la planilla acorte el nombre sola. */
+  abreviatura: string | null;
 }
 
 function leerCampos(formData: FormData): CamposProducto {
@@ -18,7 +22,14 @@ function leerCampos(formData: FormData): CamposProducto {
     nombre: String(formData.get("nombre") ?? "").trim(),
     precio: Number(String(formData.get("precio") ?? "").replace(",", ".")),
     unidad_medida: String(formData.get("unidad_medida") ?? "").trim(),
+    // Vacía y sin cargar son lo mismo: la planilla acorta el nombre sola.
+    abreviatura: String(formData.get("abreviatura") ?? "").trim() || null,
   };
+}
+
+/** Hay dos índices únicos sobre productos: hay que decir cuál se chocó. */
+function cualDuplicado(error: { message?: string }): string {
+  return (error.message ?? "").includes("abreviatura") ? ABREVIATURA_DUPLICADA : NOMBRE_DUPLICADO;
 }
 
 function validar(campos: CamposProducto): string | null {
@@ -26,6 +37,9 @@ function validar(campos: CamposProducto): string | null {
   if (!campos.unidad_medida) return "Indicá la unidad de medida (kg, unidad, etc.).";
   if (!Number.isFinite(campos.precio)) return "El precio tiene que ser un número.";
   if (campos.precio < 0) return "El precio no puede ser negativo.";
+  if (campos.abreviatura && campos.abreviatura.length > LARGO_ABREVIATURA) {
+    return `La abreviatura no puede tener más de ${LARGO_ABREVIATURA} caracteres.`;
+  }
   return null;
 }
 
@@ -40,7 +54,7 @@ export async function crearProducto(
   if (error) return fallo(error);
 
   const { error: errorDb } = await supabase.from("productos").insert(campos);
-  if (errorDb) return fallo(mensajeDeError(errorDb, NOMBRE_DUPLICADO));
+  if (errorDb) return fallo(mensajeDeError(errorDb, cualDuplicado(errorDb)));
 
   revalidatePath("/productos");
   return exito(`Producto "${campos.nombre}" creado.`);
@@ -62,7 +76,7 @@ export async function actualizarProducto(
   // Cambiar el precio acá no toca los pedidos ya cargados: cada ítem guarda
   // el precio que tenía el producto en el momento de la venta.
   const { error: errorDb } = await supabase.from("productos").update(campos).eq("id", id);
-  if (errorDb) return fallo(mensajeDeError(errorDb, NOMBRE_DUPLICADO));
+  if (errorDb) return fallo(mensajeDeError(errorDb, cualDuplicado(errorDb)));
 
   revalidatePath("/productos");
   revalidatePath(`/productos/${id}`);

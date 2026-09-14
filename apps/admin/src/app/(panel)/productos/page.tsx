@@ -3,6 +3,7 @@ import { Desplegable } from "@/components/desplegable";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
+import { abreviarNombres } from "@/lib/abreviar";
 import { formatearPrecio } from "@/lib/formato";
 import { crearProducto } from "./actions";
 import { FormularioProducto } from "./formulario";
@@ -12,8 +13,12 @@ export default async function PaginaProductos() {
 
   const { data: productos, error } = await supabase
     .from("productos")
-    .select("id, nombre, precio, unidad_medida, activo")
+    .select("id, nombre, precio, unidad_medida, abreviatura, activo")
     .order("nombre");
+
+  // La que se usaría si no se cargó ninguna: se muestra en gris para que se
+  // vea cómo va a salir impreso sin tener que abrir la planilla.
+  const automaticas = abreviarNombres((productos ?? []).map((producto) => producto.nombre));
 
   return (
     <>
@@ -44,6 +49,14 @@ export default async function PaginaProductos() {
             },
             { encabezado: "Precio", celda: (producto) => formatearPrecio(Number(producto.precio)) },
             { encabezado: "Unidad", celda: (producto) => producto.unidad_medida },
+            {
+              encabezado: "En la planilla",
+              soloEscritorio: true,
+              celda: (producto) =>
+                producto.abreviatura ?? (
+                  <span className="text-stone-400">{automaticas.get(producto.nombre)}</span>
+                ),
+            },
             { encabezado: "Estado", celda: (producto) => <Etiqueta activo={producto.activo} /> },
             {
               encabezado: "Acciones",

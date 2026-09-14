@@ -84,6 +84,8 @@ export type Database = {
           nombre: string;
           precio: number;
           unidad_medida: string;
+          /** Cómo se llama corto en la planilla del día. null = se acorta solo. */
+          abreviatura: string | null;
           activo: boolean;
           created_at: string;
         };
@@ -92,6 +94,7 @@ export type Database = {
           nombre: string;
           precio: number;
           unidad_medida: string;
+          abreviatura?: string | null;
           activo?: boolean;
           created_at?: string;
         };
@@ -100,6 +103,7 @@ export type Database = {
           nombre?: string;
           precio?: number;
           unidad_medida?: string;
+          abreviatura?: string | null;
           activo?: boolean;
           created_at?: string;
         };

@@ -12,6 +12,7 @@ interface ValoresProducto {
   nombre?: string;
   precio?: number;
   unidad_medida?: string;
+  abreviatura?: string | null;
 }
 
 export function FormularioProducto({
@@ -32,7 +33,7 @@ export function FormularioProducto({
     <form key={claveFormulario} action={ejecutar} className="space-y-4">
       {valores?.id ? <input type="hidden" name="id" value={valores.id} /> : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <div className="sm:col-span-1">
           <Campo etiqueta="Nombre">
             <input
@@ -63,6 +64,19 @@ export function FormularioProducto({
             list="unidades-sugeridas"
             defaultValue={valores?.unidad_medida ?? ""}
             required
+            className={estilos.input}
+          />
+        </Campo>
+
+        <Campo
+          etiqueta="Abreviatura"
+          ayuda="Cómo se escribe en la planilla del día, que se imprime en una hoja. Si se deja vacía, se acorta el nombre solo."
+        >
+          <input
+            name="abreviatura"
+            defaultValue={valores?.abreviatura ?? ""}
+            maxLength={20}
+            placeholder="Opcional"
             className={estilos.input}
           />
         </Campo>

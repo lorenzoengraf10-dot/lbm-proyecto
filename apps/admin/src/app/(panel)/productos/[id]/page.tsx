@@ -17,7 +17,7 @@ export default async function PaginaEditarProducto({
 
   const { data: producto } = await supabase
     .from("productos")
-    .select("id, nombre, precio, unidad_medida, activo")
+    .select("id, nombre, precio, unidad_medida, abreviatura, activo")
     .eq("id", id)
     .maybeSingle();
 
