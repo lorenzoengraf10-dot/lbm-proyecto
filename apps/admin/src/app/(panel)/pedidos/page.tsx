@@ -75,7 +75,14 @@ export default async function PaginaPedidos({
 
   return (
     <>
-      <h1 className="text-xl font-semibold text-stone-900">Pedidos</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-stone-900">Pedidos</h1>
+        {/* Acá es donde se la vino a buscar: esta pantalla es para revisar
+            pedido por pedido, la planilla es para armarlos todos juntos. */}
+        <Link href="/planilla" className={estilos.botonSecundario}>
+          Planilla para armar
+        </Link>
+      </div>
 
       <form className="flex flex-wrap items-end gap-3">
         <label className="block space-y-1 text-sm">

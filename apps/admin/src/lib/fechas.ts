@@ -22,13 +22,92 @@ export function diasDesde(iso: string): number {
 // Si algún día vuelve, este es el único lugar a tocar.
 export const OFFSET_ARGENTINA = "-03:00";
 
-/** Los dos instantes que delimitan un día argentino: desde inclusive, hasta exclusivo. */
-export function rangoDelDia(dia: string): { desdeIso: string; hastaIso: string } {
-  const desde = new Date(`${dia}T00:00:00${OFFSET_ARGENTINA}`);
+/**
+ * Un tramo de días argentinos, con los días humanos y los instantes exactos
+ * juntos. Mismo patrón que Semana en semana.ts: se valida una vez en el borde
+ * y de ahí en adelante viaja armado, así la pantalla y la descarga no pueden
+ * mirar tramos distintos.
+ */
+export interface RangoDias {
+  /** Primer día, YYYY-MM-DD, inclusive. */
+  desde: string;
+  /** Último día, YYYY-MM-DD, inclusive. */
+  hasta: string;
+  /** Instante del "desde" a las 00:00 Argentina, en ISO. */
+  desdeIso: string;
+  /** Instante del día siguiente al "hasta" a las 00:00 Argentina (exclusivo). */
+  hastaIso: string;
+  /** Cuántos días abarca, contando los dos extremos. */
+  dias: number;
+  /** true si se pidió un tramo más largo que el máximo y hubo que recortarlo. */
+  recortado: boolean;
+}
+
+/**
+ * Un tramo tan largo se trae toda la historia con sus ítems anidados a
+ * memoria y no sirve para armar pedidos: es un pedido mal escrito en la URL,
+ * no algo que alguien quiera de verdad. Dos meses da para cerrar cualquier
+ * cosa que haya quedado pendiente.
+ */
+export const MAXIMO_DIAS_PLANILLA = 62;
+
+/**
+ * El tramo entre dos días argentinos, desde inclusive y hasta exclusivo.
+ *
+ * Da vuelta los extremos si vienen al revés (comparar YYYY-MM-DD como texto
+ * ya es comparar cronológicamente) y recorta si se pasa del máximo. Las dos
+ * cosas acá adentro a propósito: si cada pantalla las hiciera por su cuenta,
+ * alcanzaría con que una se olvidara para que el Excel y la pantalla dijeran
+ * cosas distintas.
+ */
+export function rangoDeDias(desde: string, hasta: string): RangoDias {
+  let primero = desde <= hasta ? desde : hasta;
+  const ultimo = desde <= hasta ? hasta : desde;
+
+  const dias = Math.round(
+    (Date.parse(`${ultimo}T12:00:00Z`) - Date.parse(`${primero}T12:00:00Z`)) / 86_400_000 + 1
+  );
+  // Se recorta por el principio: el que pide un tramo enorme quiere lo último,
+  // no lo de 2020.
+  const recortado = dias > MAXIMO_DIAS_PLANILLA;
+  if (recortado) primero = sumarDias(ultimo, -(MAXIMO_DIAS_PLANILLA - 1));
+
+  const inicio = new Date(`${primero}T00:00:00${OFFSET_ARGENTINA}`);
   return {
-    desdeIso: desde.toISOString(),
-    hastaIso: new Date(desde.getTime() + 86_400_000).toISOString(),
+    desde: primero,
+    hasta: ultimo,
+    desdeIso: inicio.toISOString(),
+    // El día siguiente al último a las 00:00, exclusivo. Con
+    // `${hasta}T23:59:59` —que es lo que se repite en otras pantallas— los
+    // pedidos de entre las 21 y las 24 se caen por el offset.
+    hastaIso: new Date(`${sumarDias(ultimo, 1)}T00:00:00${OFFSET_ARGENTINA}`).toISOString(),
+    dias: recortado ? MAXIMO_DIAS_PLANILLA : dias,
+    recortado,
   };
+}
+
+/** Los dos instantes que delimitan un día argentino: desde inclusive, hasta exclusivo. */
+export function rangoDelDia(dia: string): RangoDias {
+  return rangoDeDias(dia, dia);
+}
+
+/**
+ * El rango que piden dos parámetros de la URL, con todo lo que puede venir
+ * mal ya resuelto: basura cae al día por defecto, un solo extremo completa el
+ * otro con sí mismo, al revés se da vuelta y de más se recorta.
+ *
+ * La pantalla y la descarga tienen que llamar a esta misma función: con
+ * cuatro parámetros sueltos, validar por duplicado es la puerta por la que
+ * empiezan a mostrar tramos distintos.
+ */
+export function rangoDesdeParametros(
+  desde: string | undefined | null,
+  hasta: string | undefined | null,
+  porDefecto: string
+): RangoDias {
+  const primero = diaValido(desde);
+  const ultimo = diaValido(hasta);
+  return rangoDeDias(primero ?? ultimo ?? porDefecto, ultimo ?? primero ?? porDefecto);
 }
 
 // El día viaja en la URL (?dia=2026-09-13), así que puede llegar cualquier
@@ -53,6 +132,46 @@ const formatoDiaLargo = new Intl.DateTimeFormat("es-AR", {
 /** "domingo, 13 de septiembre de 2026" */
 export function etiquetaDiaLargo(dia: string): string {
   return formatoDiaLargo.format(new Date(`${dia}T12:00:00Z`));
+}
+
+// Las tres piezas con las que se arma el título de un rango. A mano y no con
+// formatRange(): lo que devuelve depende de los datos de ICU que traiga el
+// Node que toque, y esto termina en una hoja impresa.
+const partesDeDia = { timeZone: "America/Argentina/Buenos_Aires" } as const;
+const formatoSoloDia = new Intl.DateTimeFormat("es-AR", { ...partesDeDia, day: "numeric" });
+const formatoDiaMes = new Intl.DateTimeFormat("es-AR", {
+  ...partesDeDia,
+  day: "numeric",
+  month: "long",
+});
+const formatoDiaMesAnio = new Intl.DateTimeFormat("es-AR", {
+  ...partesDeDia,
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+/**
+ * El título del tramo: "10 al 15 de septiembre de 2026", "28 de agosto al 3
+ * de septiembre de 2026", o el día largo de siempre si es uno solo.
+ *
+ * En el rango se cae el día de la semana: "del lunes 10 al martes 15" es
+ * ruido en el encabezado de una hoja impresa.
+ */
+export function etiquetaRango(desde: string, hasta: string): string {
+  if (desde === hasta) return etiquetaDiaLargo(desde);
+
+  const inicio = new Date(`${desde}T12:00:00Z`);
+  const fin = new Date(`${hasta}T12:00:00Z`);
+  const mismoAnio = desde.slice(0, 4) === hasta.slice(0, 4);
+  const mismoMes = mismoAnio && desde.slice(5, 7) === hasta.slice(5, 7);
+
+  const principio = mismoMes
+    ? formatoSoloDia.format(inicio)
+    : mismoAnio
+      ? formatoDiaMes.format(inicio)
+      : formatoDiaMesAnio.format(inicio);
+  return `${principio} al ${formatoDiaMesAnio.format(fin)}`;
 }
 
 /** Suma (o resta) días a un YYYY-MM-DD sin que el huso mueva la fecha. */

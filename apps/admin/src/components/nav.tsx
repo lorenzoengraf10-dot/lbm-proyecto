@@ -8,6 +8,10 @@ const SECCIONES = [
   { href: "/comercios", etiqueta: "Comercios" },
   { href: "/productos", etiqueta: "Productos" },
   { href: "/pedidos", etiqueta: "Pedidos" },
+  // Justo detrás de Pedidos, que es donde se la busca. Ojo con el orden y con
+  // la ruta: lo activo se marca con startsWith, así que si la planilla
+  // colgara de /comercios se encenderían dos ítems a la vez.
+  { href: "/planilla", etiqueta: "Planilla" },
   { href: "/cobertura", etiqueta: "Cobertura" },
   { href: "/estadisticas", etiqueta: "Estadísticas" },
   { href: "/comisiones", etiqueta: "Comisiones" },
@@ -35,7 +39,7 @@ export function Nav({ nombre }: { nombre: string }) {
         </div>
       </div>
 
-      {/* En el celular las siete secciones no entran: se arrastran de costado
+      {/* En el celular las secciones no entran todas: se arrastran de costado
           en vez de apilarse en tres renglones y comerse media pantalla. */}
       <nav className="mx-auto w-full max-w-5xl overflow-x-auto px-4 pb-2 sm:px-6">
         <div className="flex w-max gap-1">
