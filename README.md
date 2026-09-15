@@ -19,6 +19,7 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Estados del pedido y cobro**: cada pedido va de *Pedido* a *Preparado* a *Completado*, y al completarlo se registra si se cobró en efectivo, por transferencia o quedó debiendo. Lo que queda a cuenta se ve en la portada hasta que se marca cobrado. Tanto el dueño como el repartidor pueden marcarlo, y el repartidor también sin señal (`docs/PLAN.md` sección 17).
 - **Comisión editable sin tocar el pasado**: el dueño cambia el porcentaje del repartidor desde su ficha; vale para los pedidos nuevos y los ya hechos quedan con el porcentaje que tenían, porque se congela dentro de cada pedido al crearlo. La comisión se gana con el pedido entregado.
 - **Se entra con nombre y PIN**: tanto al panel como a la app del repartidor se entra tocando el nombre y escribiendo seis números. El dueño fija los PIN desde la ficha de cada usuario, incluido el suyo. Varios errores seguidos bloquean la cuenta (quince minutos en la app, una hora en el panel). El panel conserva "Entrar con contraseña" como respaldo, porque al dueño nadie le puede resetear el PIN (`docs/PLAN.md` sección 18).
+- **Planilla para armar**: la hoja con la que se arman los pedidos a la mañana, en su propia sección del panel y también en la app del repartidor. Un día o un tramo de días, con la opción de ver solo lo que falta armar, y un Excel listo para imprimir con una casilla al costado de cada comercio para ir tachando.
 - **Velocidad**: las dos apps se despliegan en São Paulo (`"regions": ["gru1"]`), al lado de la base, y las pantallas dejaron de encadenar consultas. El panel pasó de 4,6 s a 0,9 s para las siete pantallas principales (`docs/PLAN.md` sección 16).
 
 ## Ecosistema cerrado
@@ -109,19 +110,49 @@ La **localidad** se carga una sola vez en la pantalla y vale para todo el archiv
 
 Antes de guardar nada se muestra una previsualización con lo que va a entrar y qué filas se saltean y por qué.
 
-## Planilla del día en Excel
+## Planilla para armar
 
-**Comercios → Exportar a Excel.** Una fila por comercio: el código, el nombre, y lo que pidió escrito un producto atrás del otro hasta que no le queden más.
+**Planilla**, en la barra de arriba, al lado de Pedidos. Una fila por comercio: una casilla vacía para tachar, el código, el nombre, y lo que pidió escrito un producto atrás del otro hasta que no le queden más.
 
-| Código | Comercio | Pedido | | | | Total $ |
-|---|---|---|---|---|---|---|
-| CP1 | Almacén Don José | Aceitunas 6,5 kg | Bondiola 4,5 kg | Huevos 3 doc. | Manteca 1 un. | $ 160.750,00 |
-| CP3 | Despensa Rivadavia | Bondiola 1,5 kg | Chorizo 1 kg | Lomo 4 kg | | $ 115.300,00 |
-| CP6 | Minimercado Los Álamos | | | | | |
+| Hecho | Código | Comercio | Pedido | | | | Total $ |
+|---|---|---|---|---|---|---|---|
+| ☐ | CP1 | Almacén Don José | Aceitunas 6,5 kg | Bondiola 4,5 kg | Huevos 3 doc. | Manteca 1 un. | $ 160.750,00 |
+| ☐ | CP3 | Despensa Rivadavia | Bondiola 1,5 kg | Chorizo 1 kg | Lomo 4 kg | | $ 115.300,00 |
+| | CP6 | Minimercado Los Álamos | | | | | |
 
-Debajo va **Para preparar**: el total del día de cada producto, con el nombre completo y la cantidad, y al pie el total separado por unidad (`111,5 kg · 12 doc. · 34 un.`).
+Debajo va **Para preparar**: el total de cada producto, con el nombre completo y la cantidad, cada uno con su casilla, y al pie el total separado por unidad (`111,5 kg · 12 doc. · 34 un.`).
 
-El día se elige arriba (con atajos a *Hoy* y *Ayer*) y la pantalla muestra lo mismo antes de bajar el archivo. Salen **todos** los comercios activos, así también se ve de un vistazo quién no pidió; *Mostrar solo los que pidieron* deja nada más los del día.
+### La casilla para tachar
+
+Va solo en el Excel, que es lo que se imprime; en la pantalla no tendría sentido porque la marca no se guarda en ningún lado. Una por comercio que pidió —al que le sigue el pedido en el renglón de abajo se le tacha una vez, cuando está armado entero— y una por producto en el resumen. El que no pidió no lleva casilla: no hay nada que armarle.
+
+El recuadro es más grueso y más oscuro que la cuadrícula de la hoja. La planilla se imprime cuadriculada, así que una casilla fina y clarita sería un cuadradito más entre todos los demás.
+
+### Un día o un tramo de días
+
+Arriba van **Desde** y **Hasta**, con atajos a *Hoy*, *Ayer* y *Últimos 7 días*. Sin tocar nada muestra el día de hoy, que es el uso de siempre.
+
+Sobre un tramo de varios días las cantidades **se suman**: un comercio que pidió el lunes y el miércoles sale en un solo renglón con el total. Es lo que sirve para armar, pero quiere decir que la planilla de un tramo dice *cuánto en total* y no *cuándo* — no se reconcilia pedido por pedido. La pantalla lo aclara cuando el tramo es de más de un día.
+
+Los extremos al revés se dan vuelta solos, un valor que no sirve cae al día de hoy, y un tramo de más de 62 días se recorta a los últimos 62 avisándolo en pantalla.
+
+### Solo lo que falta armar
+
+*Mostrar solo lo que falta armar* deja nada más los pedidos todavía sin preparar: se caen los que ya están armados y los entregados. El filtro va en la consulta y no filtrando la lista después, porque un comercio puede tener dos pedidos el mismo día y solo uno pendiente.
+
+Cuando está puesto se ve en la pantalla y también en la hoja impresa (el resumen de arriba dice *Solo lo que falta armar*), y el archivo se baja con el sufijo `-por-armar`. Esto último importa: bajándolo dos veces el mismo día, una con filtro y otra sin, el navegador le pone "(1)" a la segunda y después no hay forma de saber cuál es cuál. La columna de pesos también cambia de sentido con el filtro puesto —pasa a ser lo que falta armarle a cada uno— así que el encabezado pasa a decir *Pendiente*.
+
+Salen **todos** los comercios activos, así también se ve de un vistazo quién no pidió; *Mostrar solo los que pidieron* deja nada más los del tramo.
+
+### El repartidor también la puede bajar
+
+La app del repartidor tiene su propia pestaña **Planilla**, con los mismos controles y el mismo Excel: ve todos los comercios y todos los montos, igual que el dueño.
+
+Eso no sale de su sesión normal. Las RLS limitan al repartidor a los pedidos que tomó él (`vendedor_id = auth.uid()`), y **esas políticas no se tocaron**: aflojarlas ampliaría para siempre lo que su token puede leer, incluido desde el navegador y desde la sincronización offline. En cambio la ruta de la planilla verifica primero quién llama —sesión válida, usuario activo, rol de vendedor— y recién entonces lee con el cliente de servicio. El permiso ampliado vive en un solo archivo (`apps/vendedor/src/lib/planilla-repartidor.ts`), igual que el del login por PIN.
+
+Con un solo repartidor da lo mismo; el día que haya dos, cada uno va a ver la cartera y la plata del otro. Acotarlo a lo propio es agregar un filtro por `vendedor_id` en ese archivo.
+
+Esa pantalla **necesita señal**: son los pedidos de todos los comercios, no solo los que cargó ese celular, así que salen del servidor y no del IndexedDB. Sin señal lo dice en criollo en vez de mostrar la planilla de ayer, que sería idéntica a simple vista.
 
 ### La abreviatura la elige el dueño
 

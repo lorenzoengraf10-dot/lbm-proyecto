@@ -42,6 +42,29 @@ async function estaticoGuardado(solicitud) {
   return respuesta;
 }
 
+/** Lo que se ve al abrir la planilla sin señal: una pantalla que lo dice, en
+ * vez del error del navegador en inglés. La descarga del Excel no es una
+ * navegación, así que esa sí devuelve el error de red de siempre. */
+function sinSenialParaLaPlanilla(solicitud) {
+  if (solicitud.mode !== "navigate") return Response.error();
+  return new Response(
+    `<!doctype html><html lang="es"><head><meta charset="utf-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1">
+     <title>Sin señal</title>
+     <style>body{font-family:system-ui,sans-serif;margin:0;padding:24px;color:#1c1917;
+       background:#fafaf9;display:flex;min-height:100vh;align-items:center;justify-content:center}
+       div{max-width:22rem;text-align:center}h1{font-size:1.1rem;margin:0 0 .5rem}
+       p{font-size:.9rem;color:#78716c;margin:0 0 1.25rem;line-height:1.5}
+       a{display:inline-block;background:#1c1917;color:#fff;text-decoration:none;
+         padding:.75rem 1.25rem;border-radius:.375rem;font-size:.95rem}</style></head>
+     <body><div><h1>La planilla necesita señal</h1>
+     <p>Son los pedidos de todos los comercios, así que salen del servidor y no
+     del celular. Probá de nuevo cuando tengas conexión.</p>
+     <a href="/planilla">Reintentar</a></div></body></html>`,
+    { status: 503, headers: { "content-type": "text/html; charset=utf-8" } }
+  );
+}
+
 // No se precachea nada en install: el service worker se registra cuando la
 // app todavía está en el login, y ahí pedir /comercios devuelve el redirect
 // del proxy, lo que hace fallar el install entero. Se guarda a medida que el
@@ -74,6 +97,15 @@ self.addEventListener("fetch", (evento) => {
   // una respuesta vieja de esas, la app mostraría datos o sesiones que ya no
   // valen.
   if (url.pathname.startsWith("/auth") || url.pathname.startsWith("/rest")) return;
+
+  // La planilla tampoco. Es lo que hay que armar ahora, con los pedidos de
+  // todos los comercios: servida de la caché se vería igualita a la de hoy
+  // pero sería la de ayer, y con eso se preparan kilos de más o de menos. Sin
+  // señal es mejor decirlo que mostrar algo que no se puede distinguir.
+  if (url.pathname.startsWith("/planilla")) {
+    evento.respondWith(fetch(solicitud).catch(() => sinSenialParaLaPlanilla(solicitud)));
+    return;
+  }
 
   if (url.pathname.startsWith("/_next/static/")) {
     evento.respondWith(estaticoGuardado(solicitud));

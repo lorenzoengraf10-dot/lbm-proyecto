@@ -12,6 +12,7 @@ const PESTAÑAS = [
   { href: "/comercios", etiqueta: "Pedido" },
   { href: "/escanear", etiqueta: "Escanear" },
   { href: "/mis-pedidos", etiqueta: "Mis pedidos" },
+  { href: "/planilla", etiqueta: "Planilla" },
   { href: "/resumen", etiqueta: "Resumen" },
 ];
 
