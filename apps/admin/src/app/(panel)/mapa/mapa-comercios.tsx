@@ -21,7 +21,10 @@ function escapar(texto: string): string {
 
 function globo(punto: PuntoComercio): string {
   const partes = [
-    `<strong>${escapar(punto.codigo)} · ${escapar(punto.nombre)}</strong>`,
+    `<strong>${escapar(punto.codigo)} · ${escapar(punto.nombre)}</strong>` +
+      // Puede aparecer uno dado de baja si vendió durante el período: sin
+      // decirlo, se leería como un comercio que sigue andando.
+      (punto.activo ? "" : " <em>(dado de baja)</em>"),
     punto.direccion ? escapar(punto.direccion) : null,
     punto.zona ? `Zona: ${escapar(punto.zona)}` : null,
     punto.estado === "pidio"
@@ -29,7 +32,7 @@ function globo(punto: PuntoComercio): string {
       : punto.estado === "visitado"
         ? `${punto.visitas} ${punto.visitas === 1 ? "visita" : "visitas"}, sin pedido`
         : "Sin visitar en este período",
-    `<a href="/comercios/${punto.id}" style="text-decoration:underline">Ver la ficha</a>`,
+    `<a href="/comercios/${escapar(punto.id)}" style="text-decoration:underline">Ver la ficha</a>`,
   ];
   return partes.filter(Boolean).join("<br>");
 }
@@ -92,8 +95,10 @@ export function MapaComercios({
         })
           .bindPopup(globo(punto))
           // Para que se pueda encontrar uno por el nombre pasando el mouse,
-          // sin tener que abrir globo por globo.
-          .bindTooltip(`${punto.codigo} · ${punto.nombre}`);
+          // sin tener que abrir globo por globo. Escapado igual que el globo:
+          // bindTooltip escribe el texto como HTML, así que un nombre con un
+          // "<" rompería el mapa entero.
+          .bindTooltip(`${escapar(punto.codigo)} · ${escapar(punto.nombre)}`);
         marca.addTo(mapa!);
         dibujados.push(marca);
       }

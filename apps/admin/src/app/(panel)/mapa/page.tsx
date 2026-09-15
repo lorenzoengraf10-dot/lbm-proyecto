@@ -27,6 +27,10 @@ export default async function PaginaMapa({
   const zonaElegida = zona?.trim() || undefined;
 
   const mapa = await armarMapa(supabase, rango, zonaElegida);
+  // Una zona del enlace que no le corresponde a ningún comercio: hay que
+  // decirlo, porque si no el mapa sale vacío y parece que se rompió.
+  const zonaSinComercios =
+    zonaElegida !== undefined && !mapa.zonas.some((z) => z.zona === zonaElegida);
 
   const conUbicacion = mapa.puntos.length;
   const faltan = mapa.sinUbicacion.length;
@@ -63,6 +67,11 @@ export default async function PaginaMapa({
           <span className={estilos.etiqueta}>Zona</span>
           <select name="zona" defaultValue={zonaElegida ?? ""} className={estilos.input}>
             <option value="">Todo el pueblo</option>
+            {/* Si el enlace trae una zona que ya no existe —se renombró, o
+                vino mal escrita— igual se muestra elegida. Si no, el filtro
+                se aplicaba igual y el selector decía "Todo el pueblo": el
+                mapa quedaba vacío sin forma de entender por qué. */}
+            {zonaSinComercios ? <option value={zonaElegida}>{zonaElegida}</option> : null}
             {mapa.zonas.map((z) => (
               <option key={z.zona} value={z.zona}>
                 {z.zona}
@@ -112,8 +121,9 @@ export default async function PaginaMapa({
       {conUbicacion === 0 ? (
         <div className={`${estilos.tarjeta} overflow-hidden`}>
           <EstadoVacio>
-            Todavía no hay ningún comercio ubicado en el mapa. El repartidor los va cargando desde
-            la app: entra al comercio y toca “Guardar ubicación” parado en la puerta.
+            {zonaSinComercios
+              ? `Ningún comercio está en la zona “${zonaElegida}”. Elegí otra arriba, o “Todo el pueblo”.`
+              : "Todavía no hay ningún comercio ubicado en el mapa. El repartidor los va cargando desde la app: entra al comercio y toca \u201cGuardar ubicación\u201d parado en la puerta."}
           </EstadoVacio>
         </div>
       ) : (

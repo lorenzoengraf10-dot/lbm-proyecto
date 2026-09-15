@@ -138,8 +138,15 @@ export default function PaginaComercios() {
         </div>
 
         <BotonUbicacion
+          // key por comercio: el aviso de "Ubicación guardada" es del comercio
+          // que se acaba de tocar, no del siguiente.
+          key={comercio.id}
           comercioId={comercio.id}
-          yaTiene={comercio.lat !== null}
+          // typeof y no "!== null": el catálogo guardado en el celular por una
+          // versión anterior de la app no tiene el campo, así que llega
+          // undefined — y undefined !== null es true, con lo que el botón le
+          // decía "ya está en el mapa" a comercios que no lo estaban.
+          yaTiene={typeof comercio.lat === "number"}
           hayConexion={hayConexion}
           alGuardar={() => void recargar()}
         />

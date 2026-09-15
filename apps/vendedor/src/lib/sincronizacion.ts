@@ -165,8 +165,16 @@ export async function refrescarCatalogo(): Promise<void> {
     ]);
 
   if (comercios && productos) {
+    // lat llega como string ("-40.796900"): numeric siempre viaja así por
+    // PostgREST, para no perder precisión. Se normaliza acá, al guardar, en
+    // vez de que cada pantalla se acuerde — el tipo ComercioLocal dice
+    // number | null y tiene que ser cierto.
+    const normalizados = ordenarPorCodigo(comercios).map((comercio) => ({
+      ...comercio,
+      lat: comercio.lat === null ? null : Number(comercio.lat),
+    }));
     // CP2 antes que CP10: el vendedor busca por código en la lista.
-    await guardarCatalogo(ordenarPorCodigo(comercios), productos);
+    await guardarCatalogo(normalizados, productos);
   }
   if (perfil?.nombre) {
     await guardarPerfil(perfil.nombre);

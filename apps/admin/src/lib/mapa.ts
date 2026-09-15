@@ -1,4 +1,4 @@
-import { ITEMS_ANIDADOS, ordenarPorCodigo, type RangoDias } from "@lbm/shared";
+import { ordenarPorCodigo, type RangoDias } from "@lbm/shared";
 import type { SesionAdmin } from "./auth";
 
 /** Carmen de Patagones, para centrar el mapa cuando todavía no hay puntos. */
@@ -34,6 +34,8 @@ export interface PuntoComercio {
   zona: string;
   lat: number | null;
   lng: number | null;
+  /** false = dado de baja; igual aparece si tuvo movimiento en el tramo. */
+  activo: boolean;
   estado: EstadoEnElMapa;
   visitas: number;
   pedidos: number;
@@ -82,8 +84,10 @@ export async function armarMapa(
   const [{ data: comercios }, { data: visitas }, { data: pedidos }] = await Promise.all([
     supabase
       .from("comercios")
+      // Sin filtrar por activo en la consulta: más abajo se dejan afuera los
+      // dados de baja, pero solo los que además no tuvieron movimiento en el
+      // tramo (ver "visibles").
       .select("id, codigo, nombre, direccion, zona, lat, lng, activo")
-      .eq("activo", true)
       .order("codigo"),
     supabase
       .from("visitas")
@@ -92,7 +96,9 @@ export async function armarMapa(
       .lt("fecha_hora", rango.hastaIso),
     supabase
       .from("pedidos")
-      .select(`comercio_id, total, ${ITEMS_ANIDADOS}`)
+      // Solo el total: acá no se desglosa por producto, y traerse los ítems
+      // anidados eran miles de filas por mes que no se miraban nunca.
+      .select("comercio_id, total")
       .gte("fecha", rango.desdeIso)
       .lt("fecha", rango.hastaIso),
   ]);
@@ -112,7 +118,19 @@ export async function armarMapa(
     pedidosPorComercio.set(pedido.comercio_id, actual);
   }
 
-  const todos: PuntoComercio[] = ordenarPorCodigo(comercios ?? []).map((comercio) => {
+  // Los activos, más cualquiera que haya tenido movimiento en el tramo aunque
+  // después lo hayan dado de baja. Lo segundo importa: esto es para estudiar
+  // el mercado, y si dar de baja un comercio le borrara las ventas del mes
+  // pasado al total de su zona, la pantalla estaría mintiendo sobre plata que
+  // entró de verdad. Es la misma regla que usa la planilla.
+  const visibles = (comercios ?? []).filter(
+    (comercio) =>
+      comercio.activo ||
+      pedidosPorComercio.has(comercio.id) ||
+      visitasPorComercio.has(comercio.id)
+  );
+
+  const todos: PuntoComercio[] = ordenarPorCodigo(visibles).map((comercio) => {
     const visitasDe = visitasPorComercio.get(comercio.id) ?? 0;
     const pedidosDe = pedidosPorComercio.get(comercio.id);
     return {
@@ -121,8 +139,10 @@ export async function armarMapa(
       nombre: comercio.nombre,
       direccion: comercio.direccion,
       zona: comercio.zona ?? SIN_ZONA,
+      // Number() porque numeric llega como string desde PostgREST.
       lat: comercio.lat === null ? null : Number(comercio.lat),
       lng: comercio.lng === null ? null : Number(comercio.lng),
+      activo: comercio.activo,
       estado: pedidosDe ? "pidio" : visitasDe > 0 ? "visitado" : "sin-visitar",
       visitas: visitasDe,
       pedidos: pedidosDe?.cuantos ?? 0,
