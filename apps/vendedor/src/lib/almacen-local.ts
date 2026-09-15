@@ -13,7 +13,13 @@ const CATALOGO = "catalogo";
 const COLA = "cola";
 const COLA_ESTADOS = "cola-estados";
 
-export type ComercioLocal = Pick<Tabla<"comercios">, "id" | "codigo" | "nombre" | "localidad">;
+// La dirección viaja al celular para que el repartidor sepa llegar sin señal.
+// lat viene solo para saber si a ese comercio ya se le tomó la ubicación:
+// el punto en sí no se usa en la app, se dibuja en el mapa del panel.
+export type ComercioLocal = Pick<
+  Tabla<"comercios">,
+  "id" | "codigo" | "nombre" | "localidad" | "direccion" | "zona" | "lat"
+>;
 export type ProductoLocal = Pick<Tabla<"productos">, "id" | "nombre" | "precio" | "unidad_medida">;
 
 export interface PendienteCola {

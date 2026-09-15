@@ -94,7 +94,7 @@ export function ImportadorCsv() {
           Sirve un <strong>Excel</strong> (.xlsx) o un CSV con las columnas{" "}
           <code className="rounded bg-stone-100 px-1">codigo</code>,{" "}
           <code className="rounded bg-stone-100 px-1">nombre</code> y{" "}
-          <code className="rounded bg-stone-100 px-1">telefono</code>. Los códigos se guardan en
+          <code className="rounded bg-stone-100 px-1">direccion</code>. Los códigos se guardan en
           mayúsculas y, si uno ya existe, se actualizan sus datos (no se duplica ni se reactiva un
           comercio dado de baja).
         </p>
@@ -161,7 +161,10 @@ export function ImportadorCsv() {
                     <tr>
                       <th className={estilos.encabezadoCelda}>Código</th>
                       <th className={estilos.encabezadoCelda}>Nombre</th>
-                      <th className={estilos.encabezadoCelda}>Teléfono</th>
+                      <th className={estilos.encabezadoCelda}>Dirección</th>
+                      <th className={estilos.encabezadoCelda}>Zona</th>
+                      {/* La localidad se elige arriba y se aplica a todas: verla
+                          acá es la confirmación de que quedó la correcta. */}
                       <th className={estilos.encabezadoCelda}>Localidad</th>
                     </tr>
                   </thead>
@@ -172,7 +175,8 @@ export function ImportadorCsv() {
                           {fila.codigo}
                         </td>
                         <td className={estilos.celda}>{fila.nombre}</td>
-                        <td className={estilos.celda}>{fila.telefono || "—"}</td>
+                        <td className={estilos.celda}>{fila.direccion || "—"}</td>
+                        <td className={estilos.celda}>{fila.zona || "—"}</td>
                         <td className={estilos.celda}>{fila.localidad}</td>
                       </tr>
                     ))}

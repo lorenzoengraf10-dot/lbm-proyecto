@@ -12,14 +12,19 @@ export interface FilaComercio {
   codigo?: string;
   nombre?: string;
   localidad?: string;
-  telefono?: string;
+  direccion?: string;
+  zona?: string;
 }
 
-// Lo mínimo que tiene que traer el archivo. La localidad y el teléfono son
-// opcionales: la mayoría de los comercios de la cartera están en la misma
-// localidad, así que se completa una sola vez en la pantalla de importación en
-// vez de repetirla en cada fila.
+// Lo mínimo que tiene que traer el archivo. La localidad, la dirección y la
+// zona son opcionales: la mayoría de los comercios de la cartera están en la
+// misma localidad, así que se completa una sola vez en la pantalla de
+// importación en vez de repetirla en cada fila.
 export const COLUMNAS_CSV_COMERCIOS = ["codigo", "nombre"] as const;
+
+/** Lo más largo que la base acepta en cada campo de texto opcional. */
+const LARGO_DIRECCION = 120;
+const LARGO_ZONA = 40;
 
 /**
  * Valida y limpia las filas de un archivo, venga de un CSV o de un Excel.
@@ -45,7 +50,11 @@ export function normalizarFilasComercios(
     const codigo = normalizarCodigoComercio(fila.codigo ?? "");
     const nombre = fila.nombre?.trim();
     const localidad = fila.localidad?.trim() || localidadPorDefecto.trim();
-    const telefono = fila.telefono?.trim();
+    // Se recortan al largo que acepta la base en vez de rechazar la fila: una
+    // dirección larga de más es un detalle, y perder el comercio entero por
+    // eso sería peor que guardarlo con la dirección cortada.
+    const direccion = fila.direccion?.trim().slice(0, LARGO_DIRECCION);
+    const zona = fila.zona?.trim().slice(0, LARGO_ZONA);
 
     if (!codigo || !nombre) {
       errores.push(`Fila ${numeroFila}: faltan el código o el nombre — ${JSON.stringify(fila)}`);
@@ -72,7 +81,7 @@ export function normalizarFilasComercios(
     }
 
     codigosVistos.set(codigo, numeroFila);
-    validas.push({ codigo, nombre, localidad, telefono: telefono || null });
+    validas.push({ codigo, nombre, localidad, direccion: direccion || null, zona: zona || null });
   });
 
   return { validas, errores };
@@ -107,7 +116,7 @@ export function parsearCsvComercios(
       validas: [],
       errores: [
         `Al archivo le faltan columnas: ${columnasFaltantes.join(", ")}. ` +
-          `Se esperan al menos ${COLUMNAS_CSV_COMERCIOS.join(" y ")} (localidad y telefono son opcionales).`,
+          `Se esperan al menos ${COLUMNAS_CSV_COMERCIOS.join(" y ")} (localidad, direccion y zona son opcionales).`,
       ],
     };
   }

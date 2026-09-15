@@ -54,7 +54,13 @@ export type Database = {
           codigo: string;
           nombre: string;
           localidad: string;
+          /** Sigue en la base, pero salió de las pantallas: no servía para repartir. */
           telefono: string | null;
+          direccion: string | null;
+          zona: string | null;
+          lat: number | null;
+          lng: number | null;
+          ubicacion_tomada_en: string | null;
           activo: boolean;
           created_at: string;
         };
@@ -64,6 +70,11 @@ export type Database = {
           nombre: string;
           localidad: string;
           telefono?: string | null;
+          direccion?: string | null;
+          zona?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          ubicacion_tomada_en?: string | null;
           activo?: boolean;
           created_at?: string;
         };
@@ -73,6 +84,11 @@ export type Database = {
           nombre?: string;
           localidad?: string;
           telefono?: string | null;
+          direccion?: string | null;
+          zona?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          ubicacion_tomada_en?: string | null;
           activo?: boolean;
           created_at?: string;
         };
@@ -361,6 +377,10 @@ export type Database = {
       };
       corregir_pedido_admin: {
         Args: { p_pedido_id: string; p_items: Json; p_motivo: string };
+        Returns: undefined;
+      };
+      guardar_ubicacion_comercio: {
+        Args: { p_comercio_id: string; p_lat: number; p_lng: number };
         Returns: undefined;
       };
       cambiar_estado_pedido: {

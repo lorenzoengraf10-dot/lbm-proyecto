@@ -10,7 +10,8 @@ interface ValoresComercio {
   codigo?: string;
   nombre?: string;
   localidad?: string;
-  telefono?: string | null;
+  direccion?: string | null;
+  zona?: string | null;
 }
 
 export function FormularioComercio({
@@ -18,11 +19,14 @@ export function FormularioComercio({
   valores,
   textoBoton,
   limpiarAlGuardar = false,
+  zonas = [],
 }: {
   accion: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   valores?: ValoresComercio;
   textoBoton: string;
   limpiarAlGuardar?: boolean;
+  /** Las zonas que ya existen, para elegir de la lista en vez de retipearlas. */
+  zonas?: string[];
 }) {
   const [estado, ejecutar] = useActionState(accion, ESTADO_INICIAL);
 
@@ -64,12 +68,35 @@ export function FormularioComercio({
           />
         </Campo>
 
-        <Campo etiqueta="Teléfono (opcional)">
+        <Campo
+          etiqueta="Dirección (opcional)"
+          ayuda="Como se diga en el pueblo: “Mitre 340”, “Rivadavia y 7 de Marzo”, “frente a la escuela 12”."
+        >
           <input
-            name="telefono"
-            defaultValue={valores?.telefono ?? ""}
+            name="direccion"
+            defaultValue={valores?.direccion ?? ""}
+            maxLength={120}
             className={estilos.input}
           />
+        </Campo>
+
+        {/* Lista con las zonas que ya existen, pero el campo sigue siendo de
+            texto: elegir una de la lista evita escribir "centro" y "Centro"
+            como si fueran dos, y poder escribir una nueva evita tener que
+            venir a crearla a otra pantalla antes. */}
+        <Campo etiqueta="Zona (opcional)" ayuda="Para agrupar el recorrido y mirar el mapa por partes.">
+          <input
+            name="zona"
+            list="zonas-cargadas"
+            defaultValue={valores?.zona ?? ""}
+            maxLength={40}
+            className={estilos.input}
+          />
+          <datalist id="zonas-cargadas">
+            {zonas.map((zona) => (
+              <option key={zona} value={zona} />
+            ))}
+          </datalist>
         </Campo>
       </div>
 

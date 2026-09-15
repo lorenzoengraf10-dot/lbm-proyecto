@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { BotonUbicacion } from "@/components/boton-ubicacion";
 import { FormularioPedido, type ItemPedido } from "@/components/formulario-pedido";
 import { useDatosLocales } from "@/components/datos-locales";
 import { EstadoVacio, Mensaje, estilos } from "@/components/ui";
@@ -12,8 +13,16 @@ import { registrarPendiente } from "@/lib/sincronizacion";
  * Si fueran rutas separadas del servidor, cada paso necesitaría red.
  */
 export default function PaginaComercios() {
-  const { comercios, productos, ultimosPedidos, cargando, comercioRecienEscaneado, elegirComercio, recargar } =
-    useDatosLocales();
+  const {
+    comercios,
+    productos,
+    ultimosPedidos,
+    cargando,
+    comercioRecienEscaneado,
+    elegirComercio,
+    recargar,
+    hayConexion,
+  } = useDatosLocales();
 
   const [busqueda, setBusqueda] = useState("");
   const [seleccion, setSeleccion] = useState<string | null>(null);
@@ -36,7 +45,9 @@ export default function PaginaComercios() {
       (c) =>
         c.codigo.toLowerCase().includes(texto) ||
         c.nombre.toLowerCase().includes(texto) ||
-        c.localidad.toLowerCase().includes(texto)
+        c.localidad.toLowerCase().includes(texto) ||
+        (c.direccion ?? "").toLowerCase().includes(texto) ||
+        (c.zona ?? "").toLowerCase().includes(texto)
     );
   }, [comercios, busqueda]);
 
@@ -119,8 +130,19 @@ export default function PaginaComercios() {
           <h1 className="text-lg font-semibold text-stone-900">{comercio.nombre}</h1>
           <p className="text-sm text-stone-500">
             {comercio.codigo} · {comercio.localidad}
+            {comercio.zona ? ` · ${comercio.zona}` : ""}
           </p>
+          {comercio.direccion ? (
+            <p className="text-sm text-stone-700">{comercio.direccion}</p>
+          ) : null}
         </div>
+
+        <BotonUbicacion
+          comercioId={comercio.id}
+          yaTiene={comercio.lat !== null}
+          hayConexion={hayConexion}
+          alGuardar={() => void recargar()}
+        />
 
         {/* Pasar sin pedido es la excepción, no una opción al mismo nivel: va al
             pie del formulario, que además es el único que sabe si hay
@@ -149,7 +171,7 @@ export default function PaginaComercios() {
       <input
         value={busqueda}
         onChange={(evento) => setBusqueda(evento.target.value)}
-        placeholder="Buscar código, nombre o localidad"
+        placeholder="Buscar código, nombre, dirección o zona"
         className={estilos.input}
       />
 
@@ -177,8 +199,9 @@ export default function PaginaComercios() {
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-stone-900">{c.nombre}</p>
-                <p className="text-sm text-stone-500">
-                  {c.codigo} · {c.localidad}
+                <p className="truncate text-sm text-stone-500">
+                  {c.codigo}
+                  {c.direccion ? ` · ${c.direccion}` : ` · ${c.localidad}`}
                 </p>
               </div>
               <span aria-hidden className="text-stone-400">

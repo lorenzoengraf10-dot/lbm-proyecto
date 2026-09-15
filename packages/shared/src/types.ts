@@ -15,7 +15,11 @@ export interface Comercio {
   codigo: string;
   nombre: string;
   localidad: string;
-  telefono: string | null;
+  direccion: string | null;
+  /** Cómo le dice el dueño a esa parte del pueblo: "Centro", "La loma", "Ruta 3". */
+  zona: string | null;
+  lat: number | null;
+  lng: number | null;
   activo: boolean;
   createdAt: string;
 }
@@ -66,10 +70,10 @@ export interface ComercioImportRow {
   nombre: string;
   localidad: string;
   /**
-   * null cuando la fila no trae teléfono, nunca ausente: PostgREST arma el
-   * insert con las columnas del PRIMER objeto del lote, así que si a esa fila
-   * le faltaba la clave, los teléfonos de todas las demás se perdían en
-   * silencio.
+   * null cuando la fila no lo trae, nunca ausente: PostgREST arma el insert
+   * con las columnas del PRIMER objeto del lote, así que si a esa fila le
+   * faltaba la clave, el dato de todas las demás se perdía en silencio.
    */
-  telefono: string | null;
+  direccion: string | null;
+  zona: string | null;
 }

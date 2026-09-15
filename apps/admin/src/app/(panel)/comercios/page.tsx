@@ -18,7 +18,7 @@ export default async function PaginaComercios({
 
   const { data: comercios, error } = await supabase
     .from("comercios")
-    .select("id, codigo, nombre, localidad, telefono, activo")
+    .select("id, codigo, nombre, localidad, direccion, zona, lat, activo")
     .order("codigo");
 
   // La cartera son unos cientos de comercios: filtrar en memoria evita armar
@@ -27,9 +27,18 @@ export default async function PaginaComercios({
     busqueda
       ? comercio.codigo.toLowerCase().includes(busqueda) ||
         comercio.nombre.toLowerCase().includes(busqueda) ||
-        comercio.localidad.toLowerCase().includes(busqueda)
+        comercio.localidad.toLowerCase().includes(busqueda) ||
+        (comercio.direccion ?? "").toLowerCase().includes(busqueda) ||
+        (comercio.zona ?? "").toLowerCase().includes(busqueda)
       : true
   );
+
+  // Las que ya están cargadas, para elegirlas de la lista al dar de alta y no
+  // terminar con "centro" y "Centro" como si fueran dos zonas distintas.
+  const zonas = [...new Set((comercios ?? []).map((c) => c.zona).filter((z): z is string => !!z))].sort(
+    (a, b) => a.localeCompare(b, "es")
+  );
+  const sinUbicacion = (comercios ?? []).filter((c) => c.activo && c.lat === null).length;
 
   return (
     <>
@@ -49,14 +58,32 @@ export default async function PaginaComercios({
       </div>
 
       <Desplegable titulo="Agregar un comercio">
-        <FormularioComercio accion={crearComercio} textoBoton="Crear comercio" limpiarAlGuardar />
+        <FormularioComercio
+          accion={crearComercio}
+          textoBoton="Crear comercio"
+          limpiarAlGuardar
+          zonas={zonas}
+        />
       </Desplegable>
+
+      {/* La ubicación la va tomando el repartidor con el GPS al pasar, así que
+          al principio faltan casi todas. Decir cuántas faltan es lo que hace
+          que el mapa deje de estar vacío sin que nadie entienda por qué. */}
+      {sinUbicacion > 0 ? (
+        <p className="text-sm text-stone-500">
+          {sinUbicacion} {sinUbicacion === 1 ? "comercio activo todavía no tiene" : "comercios activos todavía no tienen"}{" "}
+          ubicación en el mapa. Se carga sola cuando el repartidor toca “Guardar ubicación” al pasar.{" "}
+          <Link href="/mapa" className="underline hover:text-stone-900">
+            Ver el mapa
+          </Link>
+        </p>
+      ) : null}
 
       <form className="flex gap-2">
         <input
           name="q"
           defaultValue={q ?? ""}
-          placeholder="Buscar por código, nombre o localidad"
+          placeholder="Buscar por código, nombre, dirección o zona"
           maxLength={100}
           className={estilos.input}
         />
@@ -88,11 +115,20 @@ export default async function PaginaComercios({
                 </Link>
               ),
             },
-            { encabezado: "Localidad", celda: (comercio) => comercio.localidad },
             {
-              encabezado: "Teléfono",
+              encabezado: "Dirección",
+              celda: (comercio) => comercio.direccion ?? <span className="text-stone-400">—</span>,
+            },
+            {
+              encabezado: "Zona",
               soloEscritorio: true,
-              celda: (comercio) => comercio.telefono ?? "—",
+              celda: (comercio) => comercio.zona ?? <span className="text-stone-400">—</span>,
+            },
+            {
+              encabezado: "En el mapa",
+              soloEscritorio: true,
+              celda: (comercio) =>
+                comercio.lat !== null ? "Sí" : <span className="text-stone-400">Falta</span>,
             },
             { encabezado: "Estado", celda: (comercio) => <Etiqueta activo={comercio.activo} /> },
             {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { formatearFechaHora } from "@lbm/shared";
 import { BotonEliminar } from "@/components/boton-eliminar";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
@@ -16,15 +17,22 @@ export default async function PaginaEditarComercio({
   const { supabase } = await requerirAdmin();
   const { id } = await params;
 
-  const { data: comercio } = await supabase
-    .from("comercios")
-    .select("id, codigo, nombre, localidad, telefono, activo")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: comercio }, { data: todas }] = await Promise.all([
+    supabase
+      .from("comercios")
+      .select("id, codigo, nombre, localidad, direccion, zona, lat, lng, ubicacion_tomada_en, activo")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("comercios").select("zona").not("zona", "is", null),
+  ]);
 
   if (!comercio) {
     notFound();
   }
+
+  const zonas = [...new Set((todas ?? []).map((c) => c.zona).filter((z): z is string => !!z))].sort(
+    (a, b) => a.localeCompare(b, "es")
+  );
 
   return (
     <>
@@ -41,7 +49,27 @@ export default async function PaginaEditarComercio({
           accion={actualizarComercio}
           valores={comercio}
           textoBoton="Guardar cambios"
+          zonas={zonas}
         />
+        {/* El punto del mapa no se edita acá: lo toma el repartidor con el GPS
+            del celular parado en la puerta, que es mil veces más exacto que
+            escribir dos números a mano. Acá solo se dice si ya está. */}
+        <p className="mt-4 text-sm text-stone-500">
+          {comercio.lat !== null ? (
+            <>
+              Ubicación en el mapa cargada
+              {comercio.ubicacion_tomada_en
+                ? ` el ${formatearFechaHora(comercio.ubicacion_tomada_en)}`
+                : ""}
+              .{" "}
+              <Link href="/mapa" className="underline hover:text-stone-900">
+                Verla en el mapa
+              </Link>
+            </>
+          ) : (
+            "Todavía sin ubicación en el mapa. La toma el repartidor con el GPS del celular al pasar por la puerta."
+          )}
+        </p>
       </div>
 
       <div className={`${estilos.tarjeta} flex flex-wrap items-center gap-5 p-5`}>

@@ -6,6 +6,7 @@ import { cerrarSesion } from "@/lib/sesion";
 
 const SECCIONES = [
   { href: "/comercios", etiqueta: "Comercios" },
+  { href: "/mapa", etiqueta: "Mapa" },
   { href: "/productos", etiqueta: "Productos" },
   { href: "/pedidos", etiqueta: "Pedidos" },
   // Justo detrás de Pedidos, que es donde se la busca. Ojo con el orden y con

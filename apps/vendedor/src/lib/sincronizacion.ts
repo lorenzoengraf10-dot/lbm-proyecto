@@ -142,7 +142,11 @@ export async function refrescarCatalogo(): Promise<void> {
 
   const [{ data: comercios }, { data: productos }, { data: perfil }, { data: pedidos }] =
     await Promise.all([
-      supabase.from("comercios").select("id, codigo, nombre, localidad").eq("activo", true).order("codigo"),
+      supabase
+        .from("comercios")
+        .select("id, codigo, nombre, localidad, direccion, zona, lat")
+        .eq("activo", true)
+        .order("codigo"),
       supabase.from("productos").select("id, nombre, precio, unidad_medida").eq("activo", true).order("nombre"),
       user
         ? supabase.from("usuarios").select("nombre").eq("id", user.id).maybeSingle()

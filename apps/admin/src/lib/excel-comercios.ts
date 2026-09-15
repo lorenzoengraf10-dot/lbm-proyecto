@@ -15,8 +15,11 @@ import {
 const COLUMNAS: Record<keyof FilaComercio, string[]> = {
   codigo: ["codigo", "código", "cod", "cp"],
   nombre: ["nombre", "comercio", "negocio", "razon social", "razón social"],
-  localidad: ["localidad", "ciudad", "pueblo", "zona"],
-  telefono: ["telefono", "teléfono", "tel", "celular", "whatsapp"],
+  // "zona" ya no vale como localidad: ahora es su propia columna, y tomarla
+  // como localidad haría que "Centro" terminara siendo un pueblo.
+  localidad: ["localidad", "ciudad", "pueblo"],
+  direccion: ["direccion", "dirección", "domicilio", "calle", "ubicacion", "ubicación"],
+  zona: ["zona", "barrio", "sector"],
 };
 
 function limpiarEncabezado(valor: string): string {
@@ -106,7 +109,7 @@ export async function parsearExcelComercios(
       validas: [],
       errores: [
         "No se encontraron las columnas en el Excel. Tiene que haber una fila con los títulos " +
-          "codigo y nombre (telefono y localidad son opcionales).",
+          "codigo y nombre (localidad, direccion y zona son opcionales).",
       ],
     };
   }

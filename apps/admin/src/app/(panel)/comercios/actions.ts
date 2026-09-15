@@ -12,17 +12,24 @@ interface CamposComercio {
   codigo: string;
   nombre: string;
   localidad: string;
-  telefono: string | null;
+  direccion: string | null;
+  zona: string | null;
 }
 
+// telefono queda afuera a propósito, y no se toca en el update: la columna
+// sigue en la base con los pocos que estaban cargados, pero salió de las
+// pantallas porque no servía para repartir. Lo que hace falta es saber llegar.
 function leerCampos(formData: FormData): CamposComercio {
-  const telefono = String(formData.get("telefono") ?? "").trim();
+  // Vacío es null y no "": la base las trata distinto y conviene que haya una
+  // sola forma de decir "no está cargado".
+  const opcional = (nombre: string) => String(formData.get(nombre) ?? "").trim() || null;
 
   return {
     codigo: normalizarCodigoComercio(String(formData.get("codigo") ?? "")),
     nombre: String(formData.get("nombre") ?? "").trim(),
     localidad: String(formData.get("localidad") ?? "").trim(),
-    telefono: telefono || null,
+    direccion: opcional("direccion"),
+    zona: opcional("zona"),
   };
 }
 

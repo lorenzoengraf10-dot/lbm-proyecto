@@ -20,6 +20,7 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Comisión editable sin tocar el pasado**: el dueño cambia el porcentaje del repartidor desde su ficha; vale para los pedidos nuevos y los ya hechos quedan con el porcentaje que tenían, porque se congela dentro de cada pedido al crearlo. La comisión se gana con el pedido entregado.
 - **Se entra con nombre y PIN**: tanto al panel como a la app del repartidor se entra tocando el nombre y escribiendo seis números. El dueño fija los PIN desde la ficha de cada usuario, incluido el suyo. Varios errores seguidos bloquean la cuenta (quince minutos en la app, una hora en el panel). El panel conserva "Entrar con contraseña" como respaldo, porque al dueño nadie le puede resetear el PIN (`docs/PLAN.md` sección 18).
 - **Planilla para armar**: la hoja con la que se arman los pedidos a la mañana, en su propia sección del panel y también en la app del repartidor. Un día o un tramo de días, con la opción de ver solo lo que falta armar, y un Excel listo para imprimir con una casilla al costado de cada comercio para ir tachando.
+- **Mapa de la cartera**: cada comercio con un punto sobre el mapa de Carmen de Patagones, del color de cómo le fue en el período (pidió / se lo visitó sin pedido / ni se pasó), con el pueblo partido en zonas y un resumen de cuánto vende cada una. La ubicación la toma el repartidor con el GPS del celular al pasar por la puerta.
 - **Velocidad**: las dos apps se despliegan en São Paulo (`"regions": ["gru1"]`), al lado de la base, y las pantallas dejaron de encadenar consultas. El panel pasó de 4,6 s a 0,9 s para las siete pantallas principales (`docs/PLAN.md` sección 16).
 
 ## Ecosistema cerrado
@@ -184,6 +185,45 @@ Un kilo y una docena no se pueden sumar juntos. Cada celda del pedido trae su un
 - Si un comercio hizo **más de un pedido en el mismo día**, se suman: para preparar interesa el total.
 - Los productos de cada fila van siempre en el mismo orden (alfabético), así dos planillas de días distintos se comparan de un vistazo.
 - Un comercio dado de baja que igual pidió ese día aparece, marcado como tal.
+
+## Mapa de la cartera
+
+**Mapa**, en la barra de arriba. Un punto por comercio sobre el mapa del pueblo, del color de cómo le fue en el período elegido:
+
+- **verde**: pidió,
+- **ámbar**: se lo visitó pero no compró — el más interesante de los tres, porque ahí hay algo que averiguar,
+- **gris**: ni se pasó.
+
+Además del color cambia el tamaño, así que impreso en blanco y negro, o para quien distingue mal los colores, el punto más grande sigue siendo el que vendió. Tocando uno se abre su globo con la dirección, la zona, cuánto compró y un enlace a la ficha.
+
+Abajo va el resumen **por zona**: cuántos comercios tiene cada parte del pueblo, a cuántos se visitó, cuántos compraron y cuánto se vendió. Eso es el estudio de mercado propiamente dicho — el mapa muestra *dónde*, la tabla muestra *cuánto*. Se arma sobre todos los comercios, tengan punto o no: uno existe aunque nadie le haya tomado todavía la ubicación.
+
+### De dónde sale la ubicación
+
+La toma el repartidor con el GPS del celular, parado en la puerta: en la pantalla del comercio hay un botón **Guardar ubicación**. Es exacto y no hay nada que tipear, y se va llenando solo en el recorrido de siempre. La alternativa era escribir cincuenta y tres direcciones y buscarlas una por una en un mapa, y muchas de estas despensas de barrio no figuran en ningún lado.
+
+Detalles que importan:
+
+- Si el GPS viene con más de 60 metros de error, **no se guarda** y avisa que salga a la vereda. Un punto de quinientos metros pondría el comercio a cinco cuadras y es peor que no tener nada, porque parece bueno y no lo es.
+- Se puede volver a tomar cuantas veces haga falta: si el comercio se mudó, o si la primera lectura salió fea, se pisa la anterior.
+- **Necesita señal**, y es lo único de la app del repartidor que no anda sin conexión. Una ubicación no es urgente: si no entra hoy entra mañana al pasar.
+- El repartidor **no puede cambiar nada más** del comercio. La base solo deja escribir comercios al admin; para esto hay una función acotada (`guardar_ubicacion_comercio`) que toca exactamente la latitud, la longitud y la marca de cuándo se tomó, y que antes exige que quien llama sea un vendedor activo.
+
+### Las zonas las nombra el dueño
+
+No hay agrupamiento automático: la zona es un campo de texto en la ficha del comercio (`Centro`, `La Loma`, `Ruta 3`…), con la lista de las que ya existen para elegir de ahí y no terminar con "centro" y "Centro" como si fueran dos. El dueño sabe qué es cada parte del pueblo mejor que cualquier algoritmo, y así puede cambiarlas cuando cambia el recorrido. Los que todavía no tienen una caen en **Sin zona**, que siempre va último porque es un cajón de pendientes y no una parte del pueblo.
+
+También se puede cargar de una vez desde el Excel de importación, con una columna `zona` (o `barrio`, o `sector`).
+
+### El mapa carga de afuera, los datos no
+
+Las imágenes del mapa —las calles, las manzanas, el río— vienen de **OpenStreetMap**, que es gratis y no pide cuenta. Es lo único de todo el sistema que sale a internet: ese servidor solo ve qué pedazo del mundo se está mirando, nunca qué comercios hay ni qué pidieron. La biblioteca que dibuja (Leaflet) se sirve desde el propio dominio, no desde un CDN ajeno.
+
+## La dirección, en vez del teléfono
+
+El teléfono resultó no servir: de los cincuenta y tres comercios cargados solo catorce lo tenían, y para repartir no hace falta llamar sino saber llegar. La ficha pide ahora **dirección** (escrita como se diga en el pueblo: "Mitre 340", "Rivadavia y 7 de Marzo", "frente a la escuela 12") y **zona**.
+
+La columna `telefono` **no se borró** de la base: los que estaban cargados son datos reales que alguien tomó y borrarlos no se puede deshacer. Simplemente salió de las pantallas, y editar una ficha no la pisa. Si algún día vuelve a hacer falta, el dato sigue ahí.
 
 ## QR de los comercios
 
