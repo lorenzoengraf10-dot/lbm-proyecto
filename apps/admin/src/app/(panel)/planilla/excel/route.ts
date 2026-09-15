@@ -1,7 +1,6 @@
 import { requerirAdmin } from "@/lib/auth";
 import { excelPlanilla } from "@/lib/excel-planilla";
-import { diaArgentina, diaValido, rangoDelDia } from "@/lib/fechas";
-import { armarPlanilla } from "@/lib/planilla";
+import { armarPlanilla, leerParametrosPlanilla, nombreArchivoPlanilla } from "@/lib/planilla";
 
 const TIPO_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -10,16 +9,23 @@ export async function GET(request: Request) {
   const { supabase } = await requerirAdmin();
 
   const parametros = new URL(request.url).searchParams;
-  const dia = diaValido(parametros.get("dia")) ?? diaArgentina();
-  const soloQuePidieron = parametros.get("solo") === "1";
+  // La misma lectura que la pantalla: un día suelto, un tramo, los extremos al
+  // revés o basura pura terminan todos en el mismo rango que se está viendo.
+  const { rango, opciones } = leerParametrosPlanilla({
+    desde: parametros.get("desde") ?? undefined,
+    hasta: parametros.get("hasta") ?? undefined,
+    solo: parametros.get("solo") ?? undefined,
+    falta: parametros.get("falta") ?? undefined,
+    dia: parametros.get("dia") ?? undefined,
+  });
 
-  const planilla = await armarPlanilla(supabase, rangoDelDia(dia), { soloQuePidieron });
+  const planilla = await armarPlanilla(supabase, rango, opciones);
   const excel = await excelPlanilla(planilla);
 
   return new Response(excel as BodyInit, {
     headers: {
       "content-type": TIPO_XLSX,
-      "content-disposition": `attachment; filename="lbm-pedidos-${dia}.xlsx"`,
+      "content-disposition": `attachment; filename="${nombreArchivoPlanilla(rango, opciones)}"`,
       // Sin caché: los pedidos del día cambian todo el tiempo.
       "cache-control": "no-store",
     },

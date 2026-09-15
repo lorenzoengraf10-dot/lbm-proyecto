@@ -93,8 +93,14 @@ export function rangoDelDia(dia: string): RangoDias {
 
 /**
  * El rango que piden dos parámetros de la URL, con todo lo que puede venir
- * mal ya resuelto: basura cae al día por defecto, un solo extremo completa el
- * otro con sí mismo, al revés se da vuelta y de más se recorta.
+ * mal ya resuelto: basura cae al día por defecto, al revés se da vuelta y de
+ * más se recorta.
+ *
+ * Con un solo extremo los dos casos no son simétricos, y es a propósito.
+ * "Desde el 1" sin final se lee como "del 1 hasta hoy", así que el final lo
+ * completa el día por defecto. "Hasta el 1" sin principio no dice desde
+ * cuándo, y suponer toda la historia sería traerse dos meses sin que nadie
+ * los haya pedido: queda ese día solo.
  *
  * La pantalla y la descarga tienen que llamar a esta misma función: con
  * cuatro parámetros sueltos, validar por duplicado es la puerta por la que
@@ -107,7 +113,9 @@ export function rangoDesdeParametros(
 ): RangoDias {
   const primero = diaValido(desde);
   const ultimo = diaValido(hasta);
-  return rangoDeDias(primero ?? ultimo ?? porDefecto, ultimo ?? primero ?? porDefecto);
+  if (primero && ultimo) return rangoDeDias(primero, ultimo);
+  if (primero) return rangoDeDias(primero, porDefecto);
+  return rangoDeDias(ultimo ?? porDefecto, ultimo ?? porDefecto);
 }
 
 // El día viaja en la URL (?dia=2026-09-13), así que puede llegar cualquier

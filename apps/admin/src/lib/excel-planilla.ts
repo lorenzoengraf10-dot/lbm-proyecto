@@ -1,7 +1,7 @@
 import "server-only";
 
 import ExcelJS from "exceljs";
-import { etiquetaDiaLargo } from "./fechas";
+import { etiquetaRango } from "./fechas";
 import { formatearCantidad } from "./formato";
 import type { Planilla } from "./planilla";
 
@@ -13,10 +13,12 @@ const FILA_ENCABEZADOS = 4;
 // mano— y ahí está el problema: si mañana se antepone una columna, el
 // compilador no dice una palabra y la hoja sale corrida. No se rompe nada
 // visible en pantalla; se descubre recién con la hoja impresa en la mano.
-const COL_CODIGO = 1;
+const COL_HECHO = 1;
+const COL_CODIGO = COL_HECHO + 1;
 const COL_NOMBRE = COL_CODIGO + 1;
 const PRIMER_PEDIDO = COL_NOMBRE + 1;
 
+const ANCHO_HECHO = 6;
 const ANCHO_CODIGO = 8;
 const ANCHO_NOMBRE = 28;
 const ANCHO_PESOS = 13;
@@ -32,6 +34,18 @@ const GRIS = "FFF5F5F4";
 const APAGADO = "FF78716C";
 const BORDE = { style: "thin" as const, color: { argb: "FFD6D3D1" } };
 
+// La casilla para tachar a mano. Gruesa y oscura a propósito: la hoja se
+// imprime con la cuadrícula puesta (showGridLines), así que un recuadro fino
+// y gris claro —como BORDE— sería un cuadradito más entre todos los demás y
+// no se vería dónde hay que marcar.
+const BORDE_CASILLA = { style: "medium" as const, color: { argb: APAGADO } };
+const CASILLA = {
+  top: BORDE_CASILLA,
+  left: BORDE_CASILLA,
+  bottom: BORDE_CASILLA,
+  right: BORDE_CASILLA,
+};
+
 /**
  * La planilla del día en Excel, pensada para imprimir en A4: una fila por
  * comercio con el código, el nombre y lo que pidió escrito un producto atrás
@@ -45,11 +59,17 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   libro.creator = "La Buena Medida";
   libro.created = new Date();
 
-  // El nombre de la hoja no admite / \ ? * [ ] y se corta a 31 caracteres.
-  const hoja = libro.addWorksheet(`Pedidos ${planilla.desde.replaceAll("-", "")}`);
+  // El nombre de la hoja no admite / \ ? * [ ] y se corta a 31 caracteres:
+  // "Pedidos 20260910-20260915" son 25 y entra justo.
+  const sinGuiones = (dia: string) => dia.replaceAll("-", "");
+  const hoja = libro.addWorksheet(
+    planilla.desde === planilla.hasta
+      ? `Pedidos ${sinGuiones(planilla.desde)}`
+      : `Pedidos ${sinGuiones(planilla.desde)}-${sinGuiones(planilla.hasta)}`
+  );
 
-  // Cada celda tiene que dar para el pedido más largo del día ("Queso cremoso
-  // 2,5 kg"), sin pasarse: cada carácter de más es ancho que se le quita a la
+  // Cada celda tiene que dar para el pedido más largo ("Queso cremoso 2,5
+  // kg"), sin pasarse: cada carácter de más es ancho que se le quita a la
   // hoja impresa.
   const masLargo = planilla.filas.reduce(
     (largo, fila) => fila.lineas.reduce((maximo, linea) => Math.max(maximo, linea.texto.length), largo),
@@ -66,7 +86,9 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   // de abajo.
   const celdasPorFila = Math.max(
     3,
-    Math.floor((ANCHO_HOJA - ANCHO_CODIGO - ANCHO_NOMBRE - ANCHO_PESOS) / anchoPedido)
+    Math.floor(
+      (ANCHO_HOJA - ANCHO_HECHO - ANCHO_CODIGO - ANCHO_NOMBRE - ANCHO_PESOS) / anchoPedido
+    )
   );
   // No hacen falta más celdas que productos pidió el que más pidió. Al menos
   // una, para que la hoja de un día sin pedidos siga teniendo forma de tabla.
@@ -76,27 +98,50 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   // Los anchos se asignan antes del primer addRow: en ExcelJS, pisar
   // hoja.columns después borra lo que ya se escribió.
   hoja.columns = [
+    { key: "hecho", width: ANCHO_HECHO },
     { key: "codigo", width: ANCHO_CODIGO },
     { key: "nombre", width: ANCHO_NOMBRE },
     ...Array.from({ length: celdasPedido }, (_, i) => ({ key: `p${i}`, width: anchoPedido })),
     { key: "pesos", width: ANCHO_PESOS },
   ];
 
-  const titulo = hoja.getCell("A1");
-  titulo.value = `Pedidos del ${etiquetaDiaLargo(planilla.desde)}`;
+  // El título y el resumen van unidos de punta a punta de la tabla. Sueltos
+  // se derraman hacia la derecha, y ese derrame arrastraba el área de
+  // impresión: la hoja salía chiquita en un rincón del A4.
+  const titulo = hoja.getCell(1, COL_HECHO);
+  titulo.value = `Pedidos del ${etiquetaRango(planilla.desde, planilla.hasta)}`;
   titulo.font = { bold: true, size: 14 };
+  hoja.mergeCells(1, COL_HECHO, 1, columnaPesos);
 
   const porUnidad = planilla.unidades
     .map((unidad) => `${formatearCantidad(planilla.totales[unidad.clave] ?? 0)} ${unidad.corta}`)
     .join(" · ");
-  const resumen = hoja.getCell("A2");
+  const resumen = hoja.getCell(2, COL_HECHO);
+  // Que el filtro esté puesto tiene que verse en la hoja impresa: sin decirlo,
+  // una planilla filtrada y una entera son idénticas a simple vista, y la
+  // diferencia son kilos de fiambre.
   resumen.value =
-    `${planilla.cuantosPidieron} de ${planilla.filas.length} comercios pidieron` +
+    (planilla.soloFaltaArmar
+      ? `Solo lo que falta armar · ${planilla.cuantosPidieron} ${
+          planilla.cuantosPidieron === 1 ? "comercio" : "comercios"
+        } con algo pendiente`
+      : `${planilla.cuantosPidieron} de ${planilla.filas.length} comercios pidieron`) +
     (porUnidad ? ` · ${porUnidad}` : "");
   resumen.font = { size: 10, color: { argb: APAGADO } };
+  hoja.mergeCells(2, COL_HECHO, 2, columnaPesos);
 
   const filaEncabezados = hoja.getRow(FILA_ENCABEZADOS);
-  filaEncabezados.values = ["Código", "Comercio", "Pedido", ...Array(celdasPedido - 1).fill(""), "Total $"];
+  filaEncabezados.values = [
+    "Hecho",
+    "Código",
+    "Comercio",
+    "Pedido",
+    ...Array(celdasPedido - 1).fill(""),
+    // Con el filtro puesto la columna ya no es lo que compró el comercio sino
+    // lo que queda por armarle: el encabezado tiene que decirlo, que el
+    // número solo no se distingue.
+    planilla.soloFaltaArmar ? "Pendiente $" : "Total $",
+  ];
   filaEncabezados.font = { bold: true };
   filaEncabezados.height = 20;
   // "Pedido" va de punta a punta de las celdas del pedido: cada una lleva un
@@ -104,7 +149,7 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   if (celdasPedido > 1) {
     hoja.mergeCells(FILA_ENCABEZADOS, PRIMER_PEDIDO, FILA_ENCABEZADOS, columnaPesos - 1);
   }
-  for (let columna = COL_CODIGO; columna <= columnaPesos; columna++) {
+  for (let columna = COL_HECHO; columna <= columnaPesos; columna++) {
     const celda = filaEncabezados.getCell(columna);
     celda.alignment = { vertical: "middle", horizontal: "left" };
     celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRIS } };
@@ -119,6 +164,9 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
       const desde = renglon * celdasPedido;
       const primero = renglon === 0;
       const agregada = hoja.addRow([
+        // La casilla para tachar va vacía: es para marcar a mano sobre la hoja
+        // impresa. null y no "" para que quede de verdad sin contenido.
+        null,
         fila.codigo,
         primero ? (fila.activo ? fila.nombre : `${fila.nombre} (dado de baja)`) : "",
         ...Array.from({ length: celdasPedido }, (_, i) => fila.lineas[desde + i]?.texto ?? null),
@@ -137,6 +185,16 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
         agregada.getCell(columna).alignment = { vertical: "top", shrinkToFit: true };
       }
       agregada.getCell(columnaPesos).alignment = { vertical: "top" };
+      if (primero && fila.pidio) {
+        // Una sola casilla por comercio, en su primer renglón: al que le
+        // sigue el pedido abajo se le tacha una vez, cuando está armado
+        // entero. Y nada para el que no pidió, que no hay qué armar.
+        //
+        // Sin unir las casillas de los renglones de un mismo comercio a
+        // propósito: una celda combinada partida por un salto de página sale
+        // mal impresa.
+        agregada.getCell(COL_HECHO).border = CASILLA;
+      }
       if (!primero) {
         // El código se repite apagado: si el corte de página cae justo acá,
         // el renglón suelto igual se sabe de quién es.
@@ -162,10 +220,19 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   };
 
   hoja.addRow([]);
-  const tituloPreparar = hoja.addRow(["Para preparar"]);
+  const tituloPreparar = hoja.addRow([]);
+  tituloPreparar.getCell(COL_HECHO).value = "Hecho";
+  // "Para preparar" es literal con el filtro puesto, y también en la planilla
+  // de un día, que es la que se imprime a la mañana. Sobre un tramo de varios
+  // días sin filtro no lo es —buena parte de eso ya se entregó— y dejarlo así
+  // invitaría a armar de nuevo lo que ya salió.
+  const esParaPreparar = planilla.soloFaltaArmar || planilla.desde === planilla.hasta;
+  tituloPreparar.getCell(COL_CODIGO).value = esParaPreparar
+    ? "Para preparar"
+    : "Total de lo pedido";
   tituloPreparar.font = { bold: true };
   unirNombre(tituloPreparar);
-  for (let columna = COL_CODIGO; columna <= colUnidad; columna++) {
+  for (let columna = COL_HECHO; columna <= colUnidad; columna++) {
     tituloPreparar.getCell(columna).border = { bottom: BORDE };
   }
 
@@ -175,7 +242,10 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
     // impresa puede confirmar qué es cada abreviatura sin preguntarle a nadie.
     fila.getCell(COL_CODIGO).value =
       linea.corto === linea.nombre ? linea.nombre : `${linea.nombre} (${linea.corto})`;
+    // El merge va después de escribir el nombre y antes de la casilla:
+    // arranca en COL_CODIGO, así que la columna de la izquierda queda libre.
     unirNombre(fila);
+    fila.getCell(COL_HECHO).border = CASILLA;
     fila.getCell(colCantidad).value = linea.cantidad;
     fila.getCell(colCantidad).numFmt = FORMATO_CANTIDAD;
     fila.getCell(colCantidad).alignment = { horizontal: "right" };

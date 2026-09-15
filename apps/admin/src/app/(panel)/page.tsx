@@ -105,6 +105,16 @@ export default async function PaginaInicio() {
                 {porPreparar === 1 ? "pedido por preparar" : "pedidos por preparar"} →
               </Link>
             ) : null}
+            {porPreparar > 0 ? (
+              // El atajo que convierte "hay 12 pedidos por preparar" en la hoja
+              // lista para imprimir, sin pasar por ninguna pantalla intermedia.
+              <Link
+                href="/planilla?falta=1&solo=1"
+                className="rounded-lg border border-stone-200 px-4 py-2 text-sm text-stone-700 hover:bg-stone-50"
+              >
+                Planilla para armar →
+              </Link>
+            ) : null}
             {porEntregar > 0 ? (
               <Link
                 href="/pedidos?estado=preparado"

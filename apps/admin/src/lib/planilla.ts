@@ -1,7 +1,7 @@
 import { ordenarPorCodigo } from "@lbm/shared";
 import { abreviarNombres } from "./abreviar";
 import type { SesionAdmin } from "./auth";
-import type { RangoDias } from "./fechas";
+import { diaArgentina, rangoDesdeParametros, type RangoDias } from "./fechas";
 import { formatearCantidad } from "./formato";
 import { ITEMS_ANIDADOS } from "./reporte-semanal";
 import { claveUnidad, ordenarUnidades, unidadCorta } from "./unidades";
@@ -61,6 +61,59 @@ export interface OpcionesPlanilla {
   soloQuePidieron?: boolean;
   /** Contar solo los pedidos todavía sin preparar: lo que falta armar. */
   soloFaltaArmar?: boolean;
+}
+
+/** Lo que puede venir en la URL de la planilla. */
+export interface ParametrosPlanilla {
+  desde?: string;
+  hasta?: string;
+  solo?: string;
+  falta?: string;
+  /** Como era antes, cuando la planilla era de un día solo. */
+  dia?: string;
+}
+
+/**
+ * Lee la URL una sola vez, para la pantalla y para la descarga.
+ *
+ * Que las dos llamen a esta función es lo que hace que el Excel diga lo mismo
+ * que se está viendo: son cuatro parámetros, y validarlos por duplicado es
+ * exactamente la puerta por la que empiezan a discrepar.
+ */
+export function leerParametrosPlanilla(parametros: ParametrosPlanilla): {
+  rango: RangoDias;
+  opciones: Required<OpcionesPlanilla>;
+} {
+  return {
+    // ?dia= se sigue aceptando: es el parámetro de antes y puede estar en un
+    // enlace guardado o pegado en un mensaje.
+    rango: rangoDesdeParametros(
+      parametros.desde ?? parametros.dia,
+      parametros.hasta ?? parametros.dia,
+      diaArgentina()
+    ),
+    opciones: {
+      soloQuePidieron: parametros.solo === "1",
+      soloFaltaArmar: parametros.falta === "1",
+    },
+  };
+}
+
+/**
+ * Cómo se llama el archivo que se baja.
+ *
+ * El sufijo cuando está el filtro no es un detalle: bajando dos veces el mismo
+ * día, una con filtro y otra sin, el navegador le pone "(1)" a la segunda y
+ * después no hay forma de saber cuál es cuál — y una dice todo lo pedido y la
+ * otra solo lo que falta.
+ */
+export function nombreArchivoPlanilla(
+  rango: RangoDias,
+  { soloFaltaArmar = false }: OpcionesPlanilla = {}
+): string {
+  const cuando =
+    rango.desde === rango.hasta ? rango.desde : `${rango.desde}_a_${rango.hasta}`;
+  return `lbm-pedidos-${cuando}${soloFaltaArmar ? "-por-armar" : ""}.xlsx`;
 }
 
 /**
