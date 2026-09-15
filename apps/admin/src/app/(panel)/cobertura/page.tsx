@@ -1,10 +1,8 @@
-import { compararCodigosComercio } from "@lbm/shared";
+import { compararCodigosComercio, diasDesde, formatearFechaHora } from "@lbm/shared";
 import Link from "next/link";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { diasDesde } from "@/lib/fechas";
-import { formatearFechaHora } from "@/lib/formato";
 
 const CORTES = [
   { valor: "", etiqueta: "Todos" },

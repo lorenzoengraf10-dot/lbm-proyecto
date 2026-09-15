@@ -1,9 +1,8 @@
 "use client";
 
-import type { Tabla } from "@lbm/shared";
+import { formatearPrecio, type Tabla } from "@lbm/shared";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { formatearPrecio } from "@/lib/formato";
 import { Mensaje, estilos } from "./ui";
 
 export type ProductoCatalogo = Pick<Tabla<"productos">, "id" | "nombre" | "precio" | "unidad_medida">;

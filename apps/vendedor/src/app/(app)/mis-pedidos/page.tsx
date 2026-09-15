@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { ETIQUETA_ESTADO, estaImpago } from "@lbm/shared";
+import { ETIQUETA_ESTADO, esDeHoy, estaImpago, formatearFechaHora, formatearPrecio } from "@lbm/shared";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
-import { esDeHoy } from "@/lib/fechas";
-import { formatearFechaHora, formatearPrecio } from "@/lib/formato";
 import { PedidosPendientes } from "./pendientes";
 
 export default async function PaginaMisPedidos() {

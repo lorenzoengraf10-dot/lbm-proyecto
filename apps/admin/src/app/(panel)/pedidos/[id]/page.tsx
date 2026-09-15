@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Desplegable } from "@/components/desplegable";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { formatearCantidad, formatearComision, formatearFechaHora, formatearPrecio } from "@/lib/formato";
+import { formatearCantidad, formatearComision, formatearFechaHora, formatearPrecio } from "@lbm/shared";
 import { corregirPedido } from "./actions";
 import { PanelEstado } from "./panel-estado";
 import { FormularioCorreccion } from "./formulario-correccion";

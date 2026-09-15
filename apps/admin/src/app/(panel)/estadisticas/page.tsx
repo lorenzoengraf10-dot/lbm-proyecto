@@ -2,8 +2,7 @@ import Link from "next/link";
 import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
 import { type Estadisticas, type FilaRanking, armarEstadisticas } from "@/lib/estadisticas";
-import { mesDesdeValor, ultimosMeses } from "@/lib/fechas";
-import { formatearPrecio } from "@/lib/formato";
+import { formatearPrecio, mesDesdeValor, ultimosMeses } from "@lbm/shared";
 
 /** Una barra proporcional al máximo de la lista: se ve de un vistazo quién
  * lidera el ranking sin tener que comparar los números uno por uno. */

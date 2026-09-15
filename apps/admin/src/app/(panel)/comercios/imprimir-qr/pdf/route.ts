@@ -1,6 +1,5 @@
-import { ordenarPorCodigo } from "@lbm/shared";
+import { diaArgentina, ordenarPorCodigo } from "@lbm/shared";
 import { requerirAdmin } from "@/lib/auth";
-import { diaArgentina } from "@/lib/fechas";
 import { pdfCartelesQr } from "@/lib/pdf-qr";
 
 export async function GET(request: Request) {

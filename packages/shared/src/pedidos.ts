@@ -3,6 +3,19 @@ import type { Database } from "./database.types";
 export type EstadoPedido = Database["public"]["Enums"]["estado_pedido"];
 export type FormaPago = Database["public"]["Enums"]["forma_pago"];
 
+// Los ítems vienen anidados dentro de cada pedido, en la misma consulta.
+// Antes se pedían aparte con un .in() de todos los ids: eso era un viaje de
+// ida y vuelta más (a 120 ms del servidor, se nota) y además armaba una URL
+// de decenas de kB cuando la semana traía muchos pedidos.
+export const ITEMS_ANIDADOS = "pedido_items(producto_id, cantidad, subtotal)";
+
+export type ItemAnidado = { producto_id: string; cantidad: number; subtotal: number };
+
+/** Junta los ítems de todos los pedidos de una consulta anidada. */
+export function itemsDe(pedidos: { pedido_items?: ItemAnidado[] }[] | null): ItemAnidado[] {
+  return (pedidos ?? []).flatMap((pedido) => pedido.pedido_items ?? []);
+}
+
 /**
  * El pedido avanza siempre para adelante: se toma en el comercio, se prepara
  * en el local y se completa al entregarlo. El orden importa —la app muestra

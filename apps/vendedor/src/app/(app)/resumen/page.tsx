@@ -1,7 +1,6 @@
 import { estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
-import { mesActual, mesDesdeValor, ultimosMeses } from "@/lib/fechas";
-import { formatearCantidad, formatearComision, formatearPrecio } from "@/lib/formato";
+import { formatearCantidad, formatearComision, formatearPrecio, mesActual, mesDesdeValor, ultimosMeses } from "@lbm/shared";
 
 interface FilaRanking {
   id: string;

@@ -1,4 +1,4 @@
-import { ordenarPorCodigo } from "@lbm/shared";
+import { ITEMS_ANIDADOS, itemsDe, ordenarPorCodigo, type ItemAnidado } from "@lbm/shared";
 import type { SesionAdmin } from "./auth";
 import type { Semana } from "./semana";
 
@@ -33,22 +33,15 @@ export interface ReporteSemanal {
   };
 }
 
-// Los ítems vienen anidados dentro de cada pedido, en la misma consulta.
-// Antes se pedían aparte con un .in() de todos los ids: eso era un viaje de
-// ida y vuelta más (a 120 ms del servidor, se nota) y además armaba una URL
-// de decenas de kB cuando la semana traía muchos pedidos.
-export const ITEMS_ANIDADOS = "pedido_items(producto_id, cantidad, subtotal)";
+// ITEMS_ANIDADOS e itemsDe viven en @lbm/shared: los usa también la planilla,
+// que ahora arman las dos apps.
+//
 // comision_pct viene del pedido, no del vendedor: es el porcentaje congelado
 // cuando se cargó, así el reporte de una semana vieja sigue dando lo mismo
 // aunque después le hayan cambiado la comisión al repartidor.
 export const PEDIDOS_CON_ITEMS = `id, vendedor_id, total, comision_pct, ${ITEMS_ANIDADOS}`;
 
-export type ItemDelReporte = { producto_id: string; cantidad: number; subtotal: number };
-
-/** Junta los ítems de todos los pedidos de una consulta anidada. */
-export function itemsDe(pedidos: { pedido_items?: ItemDelReporte[] }[] | null): ItemDelReporte[] {
-  return (pedidos ?? []).flatMap((pedido) => pedido.pedido_items ?? []);
-}
+export type ItemDelReporte = ItemAnidado;
 
 /**
  * Todos los números del reporte salen de acá, así la pantalla y el PDF no

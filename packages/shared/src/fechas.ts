@@ -12,6 +12,11 @@ export function diaArgentina(fecha: Date = new Date()): string {
   return formatoDia.format(fecha);
 }
 
+/** Si ese instante cae en el día de hoy según el huso Argentina. */
+export function esDeHoy(iso: string): boolean {
+  return diaArgentina(new Date(iso)) === diaArgentina();
+}
+
 /** Días calendario (Argentina) desde la fecha dada hasta hoy. */
 export function diasDesde(iso: string): number {
   const aMedianoche = (fecha: Date) => Date.parse(`${diaArgentina(fecha)}T00:00:00Z`);
@@ -224,6 +229,12 @@ function construirMes(valor: string): Mes {
 /** A partir de "YYYY-MM" arma el rango del mes. null si el valor no sirve. */
 export function mesDesdeValor(valor: string): Mes | null {
   return FORMATO_MES.test(valor) ? construirMes(valor) : null;
+}
+
+/** El mes en curso (Argentina). */
+export function mesActual(): Mes {
+  const [anio, mes] = diaArgentina().split("-");
+  return construirMes(`${anio}-${mes}`);
 }
 
 /** Los últimos N meses (Argentina), del actual hacia atrás. */

@@ -4,7 +4,7 @@ import { BotonEliminar } from "@/components/boton-eliminar";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { formatearComision, formatearPrecio } from "@/lib/formato";
+import { formatearComision, formatearPrecio } from "@lbm/shared";
 import { cambiarEstadoUsuario, eliminarUsuario } from "../actions";
 import { FormularioComision } from "../formulario-comision";
 import { FormularioCambiarPassword } from "../formulario-cambiar-password";

@@ -3,8 +3,7 @@ import { Desplegable } from "@/components/desplegable";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { abreviarNombres } from "@/lib/abreviar";
-import { formatearPrecio } from "@/lib/formato";
+import { abreviarNombres, formatearPrecio } from "@lbm/shared";
 import { crearProducto } from "./actions";
 import { FormularioProducto } from "./formulario";
 

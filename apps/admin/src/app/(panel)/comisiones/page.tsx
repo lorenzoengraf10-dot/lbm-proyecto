@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { formatearComision, formatearPrecio } from "@/lib/formato";
+import { formatearComision, formatearPrecio } from "@lbm/shared";
 
 export default async function PaginaComisiones({
   searchParams,

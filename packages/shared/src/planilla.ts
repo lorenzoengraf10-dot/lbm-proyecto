@@ -1,10 +1,20 @@
-import { ordenarPorCodigo } from "@lbm/shared";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { abreviarNombres } from "./abreviar";
-import type { SesionAdmin } from "./auth";
+import { ordenarPorCodigo } from "./comercios";
+import type { Database } from "./database.types";
 import { diaArgentina, rangoDesdeParametros, type RangoDias } from "./fechas";
 import { formatearCantidad } from "./formato";
-import { ITEMS_ANIDADOS } from "./reporte-semanal";
+import { ITEMS_ANIDADOS } from "./pedidos";
 import { claveUnidad, ordenarUnidades, unidadCorta } from "./unidades";
+
+/**
+ * Cualquier cliente de Supabase que pueda leer pedidos, comercios y productos.
+ *
+ * Sin atarlo a la sesión del panel: la misma planilla la arma la app del
+ * repartidor, que llega por otro camino (ver la ruta de descarga de esa app,
+ * donde se verifica quién llama antes de usar el cliente de servicio).
+ */
+export type ClienteParaPlanilla = SupabaseClient<Database>;
 
 /** Un producto dentro del pedido de un comercio. */
 export interface LineaPedido {
@@ -135,7 +145,7 @@ export function nombreArchivoPlanilla(
  * pantalla y el Excel no puedan discrepar.
  */
 export async function armarPlanilla(
-  supabase: SesionAdmin["supabase"],
+  supabase: ClienteParaPlanilla,
   rango: RangoDias,
   { soloQuePidieron = false, soloFaltaArmar = false }: OpcionesPlanilla = {}
 ): Promise<Planilla> {

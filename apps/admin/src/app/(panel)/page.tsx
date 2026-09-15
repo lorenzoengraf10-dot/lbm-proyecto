@@ -3,8 +3,7 @@ import { PastillaEstado, PastillaImpago } from "@/components/estado-pedido";
 import { Tabla } from "@/components/tabla";
 import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { diaArgentina, diasDesde, rangoDelDia } from "@/lib/fechas";
-import { formatearFechaHora, formatearPrecio } from "@/lib/formato";
+import { diaArgentina, diasDesde, formatearFechaHora, formatearPrecio, rangoDelDia } from "@lbm/shared";
 import { armarReporteSemanal } from "@/lib/reporte-semanal";
 import { etiquetaSemana, semanaActual } from "@/lib/semana";
 

@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Campo, Etiqueta, Mensaje, estilos } from "@/components/ui";
 import { ESTADO_INICIAL, type EstadoFormulario } from "@/lib/formularios";
-import { formatearPrecio } from "@/lib/formato";
+import { formatearPrecio } from "@lbm/shared";
 
 interface ProductoParaCorregir {
   id: string;

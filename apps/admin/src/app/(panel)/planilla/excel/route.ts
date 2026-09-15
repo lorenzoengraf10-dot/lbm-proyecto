@@ -1,6 +1,8 @@
+import { armarPlanilla, leerParametrosPlanilla, nombreArchivoPlanilla } from "@lbm/shared";
+// Por ruta profunda y no desde el barril: excelPlanilla arrastra exceljs y
+// server-only, y desde el barril terminarían en el bundle del navegador.
+import { excelPlanilla } from "@lbm/shared/src/excel-planilla";
 import { requerirAdmin } from "@/lib/auth";
-import { excelPlanilla } from "@/lib/excel-planilla";
-import { armarPlanilla, leerParametrosPlanilla, nombreArchivoPlanilla } from "@/lib/planilla";
 
 const TIPO_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 

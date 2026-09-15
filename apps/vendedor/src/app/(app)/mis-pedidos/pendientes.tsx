@@ -2,7 +2,7 @@
 
 import { useDatosLocales } from "@/components/datos-locales";
 import { Mensaje, estilos } from "@/components/ui";
-import { formatearFechaHora } from "@/lib/formato";
+import { formatearFechaHora } from "@lbm/shared";
 
 /** Lo que todavía está en el celular sin subir, arriba de los ya guardados. */
 export function PedidosPendientes() {

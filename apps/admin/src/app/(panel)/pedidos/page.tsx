@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { ESTADOS, ETIQUETA_ESTADO, esEstado } from "@lbm/shared";
+import { ESTADOS, ETIQUETA_ESTADO, esEstado, formatearFechaHora, formatearPrecio, mesDesdeValor, ultimosMeses } from "@lbm/shared";
 import { PastillaEstado, PastillaImpago, TextoCobro } from "@/components/estado-pedido";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { mesDesdeValor, ultimosMeses } from "@/lib/fechas";
-import { formatearFechaHora, formatearPrecio } from "@/lib/formato";
 
 export default async function PaginaPedidos({
   searchParams,

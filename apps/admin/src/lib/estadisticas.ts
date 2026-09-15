@@ -1,5 +1,5 @@
+import { ITEMS_ANIDADOS, itemsDe } from "@lbm/shared";
 import type { SesionAdmin } from "./auth";
-import { ITEMS_ANIDADOS, itemsDe } from "./reporte-semanal";
 
 export interface FilaRanking {
   id: string;

@@ -3,7 +3,7 @@ import { Desplegable } from "@/components/desplegable";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, Etiqueta, estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { formatearComision } from "@/lib/formato";
+import { formatearComision } from "@lbm/shared";
 import { FormularioNuevoUsuario } from "./formulario-nuevo";
 
 export default async function PaginaUsuarios() {

@@ -2,9 +2,7 @@ import Link from "next/link";
 import { Tabla } from "@/components/tabla";
 import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { MAXIMO_DIAS_PLANILLA, diaArgentina, etiquetaRango, sumarDias } from "@/lib/fechas";
-import { formatearCantidad, formatearPrecio } from "@/lib/formato";
-import { armarPlanilla, leerParametrosPlanilla, type ParametrosPlanilla } from "@/lib/planilla";
+import { MAXIMO_DIAS_PLANILLA, armarPlanilla, diaArgentina, etiquetaRango, formatearCantidad, formatearPrecio, leerParametrosPlanilla, sumarDias, type ParametrosPlanilla } from "@lbm/shared";
 
 export default async function PaginaPlanilla({
   searchParams,

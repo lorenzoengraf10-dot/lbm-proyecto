@@ -1,7 +1,7 @@
 import { Tabla } from "@/components/tabla";
 import { estilos } from "@/components/ui";
 import { requerirAdmin } from "@/lib/auth";
-import { formatearCantidad, formatearComision, formatearPrecio } from "@/lib/formato";
+import { formatearCantidad, formatearComision, formatearPrecio } from "@lbm/shared";
 import { armarReporteSemanal } from "@/lib/reporte-semanal";
 import { etiquetaSemana, semanaActual, semanaDeDia, ultimasSemanas } from "@/lib/semana";
 

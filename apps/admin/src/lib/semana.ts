@@ -1,4 +1,4 @@
-import { OFFSET_ARGENTINA, diaArgentina, diaValido, sumarDias } from "./fechas";
+import { OFFSET_ARGENTINA, diaArgentina, diaValido, sumarDias } from "@lbm/shared";
 
 // La semana del negocio es lunes a domingo en huso Argentina (docs/PLAN.md,
 // punto 6 de las ambigüedades).

@@ -1,6 +1,6 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { formatearCantidad, formatearComision, formatearPrecio } from "./formato";
+import { formatearCantidad, formatearComision, formatearPrecio } from "@lbm/shared";
 import type { ReporteSemanal } from "./reporte-semanal";
 import { etiquetaSemana, type Semana } from "./semana";
 
