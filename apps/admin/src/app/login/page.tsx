@@ -11,12 +11,18 @@ export default async function PaginaLogin() {
   // (falta una variable de entorno, Supabase no responde un instante) no
   // puede mostrar la pantalla de error genérica del navegador, en inglés y
   // sin decir qué pasa.
+  //
+  // Y tampoco puede tapar el formulario entero: el login por contraseña usa
+  // supabase.auth directo, sin la clave de servicio, así que sigue andando
+  // aunque esta consulta falle. Por eso el error no reemplaza el formulario,
+  // solo se avisa arriba — con la lista vacía, FormularioLogin ya sabe ir
+  // directo a usuario y contraseña, que es exactamente lo que hace falta acá.
   let admins: Awaited<ReturnType<typeof listarAdmins>> = [];
-  let error: string | null = null;
+  let aviso: string | null = null;
   try {
     admins = await listarAdmins();
   } catch {
-    error = "No se pudo conectar. Probá de nuevo en un rato.";
+    aviso = "No se pudo cargar la lista de nombres. Entrá con tu usuario y contraseña.";
   }
 
   return (
@@ -24,7 +30,12 @@ export default async function PaginaLogin() {
       <div className={`${estilos.tarjeta} w-full max-w-xs p-6`}>
         <h1 className="text-center text-lg font-semibold text-stone-900">La Buena Medida</h1>
         <p className="mb-6 text-center text-sm text-stone-500">Panel de administración</p>
-        {error ? <Mensaje tipo="error">{error}</Mensaje> : <FormularioLogin admins={admins} />}
+        {aviso ? (
+          <div className="mb-4">
+            <Mensaje tipo="error">{aviso}</Mensaje>
+          </div>
+        ) : null}
+        <FormularioLogin admins={admins} />
       </div>
     </main>
   );
