@@ -11,16 +11,16 @@ Ver [docs/PLAN.md](docs/PLAN.md) para el plan de desarrollo (stack, estructura y
 - **Etapa 3 — QR**: completa. Cartel imprimible por comercio, individual y en hoja para toda la cartera.
 - **Etapa 4 — App del vendedor**: completa. Página web (no app nativa, ver `docs/PLAN.md` sección 9): login + PIN de desbloqueo, listado de comercios con buscador, escaneo de QR, carga de pedido y último pedido del comercio como referencia.
 - **Etapa 5 — Modo sin señal**: completa. El catálogo queda guardado en el celular y lo que el vendedor carga va a una cola local que se sube sola cuando vuelve la señal. Los identificadores se generan en el celular, así que reintentar no duplica nada.
-- **Etapa 6 — Pedidos, comisiones y reportes**: completa. El panel tiene **Pedidos** (listado con filtros + detalle), **Comisiones** (total vendido y a pagar por vendedor, por rango), **Cobertura** (hace cuánto que nadie visita cada comercio) y el **Reporte semanal** con descarga en PDF.
+- **Etapa 6 — Pedidos, comisiones y reportes**: completa. El panel tiene **Pedidos** (con dos solapas: el listado con filtros y la hoja para armar), **Cobertura** (hace cuánto que nadie visita cada comercio) y **Números**, donde viven lo facturado, los rankings, lo que hay que pagar de comisiones y el reporte semanal en PDF.
 - El vendedor puede además **corregir o anular** un pedido el mismo día que lo cargó; pasada esa ventana queda fijo, para no mover comisiones ya reportadas.
 - El admin puede **ver el registro por mes y corregir cualquier pedido**, incluso viejo, desde su detalle — queda anotado quién, cuándo y por qué (`docs/PLAN.md` sección 13).
-- **Estadísticas** (admin): qué comercios compran más, qué productos se venden más y cómo viene cada vendedor, por período. El vendedor tiene su versión personal en **Resumen** (`docs/PLAN.md` sección 14).
+- **Números** (admin): en una sola pantalla y con un solo período, lo facturado, el ticket promedio, qué comercios compran más, qué productos se venden más, cuánto vendió cada repartidor y cuánto hay que pagarle. Antes eran tres secciones —Estadísticas, Comisiones y Reporte— que contestaban casi lo mismo pero cada una con su propio selector de fecha (por mes, por desde/hasta y por semana), así que había que aprender cuál mira qué y comparar entre ellas era imposible. Las direcciones viejas siguen andando: redirigen traduciendo el período. El vendedor tiene su versión personal en **Resumen** (`docs/PLAN.md` sección 14).
 - **Carteles QR en PDF**: desde *Comercios → QR para imprimir*, un PDF con todos los carteles (QR + código + nombre), seis por hoja A4 en tamaño real, listo para llevar a una imprenta (`docs/PLAN.md` sección 15).
 - **Estados del pedido y cobro**: cada pedido va de *Pedido* a *Preparado* a *Completado*, y al completarlo se registra si se cobró en efectivo, por transferencia o quedó debiendo. Lo que queda a cuenta se ve en la portada hasta que se marca cobrado. Tanto el dueño como el repartidor pueden marcarlo, y el repartidor también sin señal (`docs/PLAN.md` sección 17).
 - **Comisión editable sin tocar el pasado**: el dueño cambia el porcentaje del repartidor desde su ficha; vale para los pedidos nuevos y los ya hechos quedan con el porcentaje que tenían, porque se congela dentro de cada pedido al crearlo. La comisión se gana con el pedido entregado.
 - **Se entra con nombre y PIN**: tanto al panel como a la app del repartidor se entra tocando el nombre y escribiendo seis números. El dueño fija los PIN desde la ficha de cada usuario, incluido el suyo. Varios errores seguidos bloquean la cuenta (quince minutos en la app, una hora en el panel). El panel conserva "Entrar con contraseña" como respaldo, porque al dueño nadie le puede resetear el PIN (`docs/PLAN.md` sección 18).
-- **Planilla para armar**: la hoja con la que se arman los pedidos a la mañana, en su propia sección del panel y también en la app del repartidor. Un día o un tramo de días, con la opción de ver solo lo que falta armar, y un Excel listo para imprimir con una casilla al costado de cada comercio para ir tachando.
-- **Mapa de la cartera**: cada comercio con un punto sobre el mapa de Carmen de Patagones, del color de cómo le fue en el período (pidió / se lo visitó sin pedido / ni se pasó), con el pueblo partido en zonas y un resumen de cuánto vende cada una. La ubicación la toma el repartidor con el GPS del celular al pasar por la puerta.
+- **Planilla para armar**: la hoja con la que se arman los pedidos a la mañana, en la solapa **Para armar** de Pedidos y también en la app del repartidor. Un día o un tramo de días, con la opción de ver solo lo que falta armar, y un Excel listo para imprimir con una casilla al costado de cada comercio para ir tachando.
+- **Mapa de la cartera**: cada comercio con un punto sobre el mapa de Carmen de Patagones, del color de cómo le fue en el período (pidió / se lo visitó sin pedido / ni se pasó), con el pueblo partido en zonas y un resumen de cuánto vende cada una. La ubicación la toma el repartidor con el GPS al pasar por la puerta, o la marca el dueño desde la ficha del comercio.
 - **Velocidad**: las dos apps se despliegan en São Paulo (`"regions": ["gru1"]`), al lado de la base, y las pantallas dejaron de encadenar consultas. El panel pasó de 4,6 s a 0,9 s para las siete pantallas principales (`docs/PLAN.md` sección 16).
 
 ## Ecosistema cerrado
@@ -113,7 +113,7 @@ Antes de guardar nada se muestra una previsualización con lo que va a entrar y 
 
 ## Planilla para armar
 
-**Planilla**, en la barra de arriba, al lado de Pedidos. Una fila por comercio: una casilla vacía para tachar, el código, el nombre, y lo que pidió escrito un producto atrás del otro hasta que no le queden más.
+**Pedidos → Para armar**, la segunda solapa. Una fila por comercio: una casilla vacía para tachar, el código, el nombre, y lo que pidió escrito un producto atrás del otro hasta que no le queden más.
 
 | Hecho | Código | Comercio | Pedido | | | | Total $ |
 |---|---|---|---|---|---|---|---|
@@ -209,6 +209,8 @@ Detalles que importan:
 - **Necesita señal**, y es lo único de la app del repartidor que no anda sin conexión. Una ubicación no es urgente: si no entra hoy entra mañana al pasar.
 - El repartidor **no puede cambiar nada más** del comercio. La base solo deja escribir comercios al admin; para esto hay una función acotada (`guardar_ubicacion_comercio`) que toca exactamente la latitud, la longitud y la marca de cuándo se tomó, y que antes exige que quien llama sea un vendedor activo.
 
+**El dueño también puede ponerla**, desde la ficha del comercio, de las tres formas que sirven según dónde esté cuando se acuerda: tocando la puerta en un mapa, con el botón de GPS si está parado ahí con el celular, o escribiendo las coordenadas si las copió de otro lado (la coma vale como punto decimal). Las tres llenan los mismos dos campos y guardan con el mismo botón. También se puede **sacar del mapa**: un punto mal puesto engaña más que uno que falta, porque el que arma el recorrido lo da por bueno y sale a buscar una puerta que no está ahí. Esto va por las RLS normales del admin y no por `guardar_ubicacion_comercio` — esa función existe para darle al repartidor un permiso que no tiene, y el admin ya puede escribir comercios.
+
 ### Las zonas las nombra el dueño
 
 No hay agrupamiento automático: la zona es un campo de texto en la ficha del comercio (`Centro`, `La Loma`, `Ruta 3`…), con la lista de las que ya existen para elegir de ahí y no terminar con "centro" y "Centro" como si fueran dos. El dueño sabe qué es cada parte del pueblo mejor que cualquier algoritmo, y así puede cambiarlas cuando cambia el recorrido. Los que todavía no tienen una caen en **Sin zona**, que siempre va último porque es un cajón de pendientes y no una parte del pueblo.
@@ -234,6 +236,14 @@ Cada comercio tiene su cartel de 7×9 cm con el QR, el código y el nombre:
 - **Todos, desde el navegador**: la misma pantalla tiene el botón "Imprimir", que manda la hoja a la impresora de la máquina. Se recortan por la línea de puntos.
 
 El QR guarda `LBM:<código>` como texto plano. No es un link: si alguien lo escanea con la cámara del celular no lo lleva a ningún lado, solo la app del vendedor lo entiende.
+
+### El pedido se carga escaneando, y no de otra forma
+
+El QR es la única prueba de que el repartidor estuvo parado en la puerta. Eligiendo el comercio de una lista, un pedido se puede cargar desde cualquier lado, y ahí "visitado" deja de querer decir nada. Así que el camino normal es escanear: desde la lista, el comercio muestra el candado y un botón que lleva a la cámara.
+
+El candado tiene salida, porque un cartel despegado no puede costar una venta: se puede **seguir sin QR**, pero hay que escribir por qué (mínimo tres letras) y el pedido queda marcado como **sin QR** en el listado del panel, con el motivo a la vista en la ficha. La base también lo exige, así que no hay forma de saltearlo desde afuera de la app.
+
+El escáner anda sin señal: el código se resuelve contra la cartera guardada en el celular, y la pantalla se guarda en el celular apenas se abre la app con señal, antes de salir.
 
 ## Estructura
 

@@ -1,233 +1,97 @@
 import Link from "next/link";
-import { ESTADOS, ETIQUETA_ESTADO, esEstado, formatearFechaHora, formatearPrecio, mesDesdeValor, ultimosMeses } from "@lbm/shared";
-import { PastillaEstado, PastillaImpago, TextoCobro } from "@/components/estado-pedido";
-import { Tabla } from "@/components/tabla";
-import { EstadoVacio, estilos } from "@/components/ui";
+import { diaArgentina, leerParametrosPlanilla, mesDesdeValor } from "@lbm/shared";
 import { requerirAdmin } from "@/lib/auth";
+import { VISTA_ARMAR, esVistaDeArmado, type ParametrosPedidos } from "./parametros";
+import { VistaLista } from "./vista-lista";
+import { VistaParaArmar } from "./vista-planilla";
 
+/**
+ * Los pedidos, en dos maneras de mirar lo mismo.
+ *
+ * Antes eran dos secciones del menú, y eso obligaba a elegir cuál abrir antes
+ * de saber qué se venía a hacer: "Pedidos" para revisar uno y "Planilla" para
+ * armarlos todos. Son el mismo dato con dos recortes, así que van juntos y se
+ * cambia con una solapa, sin volver al menú ni perder el tramo de fechas.
+ */
 export default async function PaginaPedidos({
   searchParams,
 }: {
-  searchParams: Promise<{
-    vendedor?: string;
-    desde?: string;
-    hasta?: string;
-    mes?: string;
-    estado?: string;
-    impagos?: string;
-  }>;
+  searchParams: Promise<ParametrosPedidos>;
 }) {
   const { supabase } = await requerirAdmin();
-  const { vendedor, mes: mesPedido, estado: estadoPedido, impagos } = await searchParams;
-  let { desde, hasta } = await searchParams;
+  const parametros = await searchParams;
+  const armar = esVistaDeArmado(parametros);
 
-  // El registro mensual: elegir un mes pisa cualquier Desde/Hasta escrito a
-  // mano, para no tener dos filtros de fecha compitiendo a la vez. Un mes que
-  // no existe (un enlace viejo, un pegado a medias) se ignora en vez de
-  // tumbar la pantalla.
-  const rango = mesPedido ? mesDesdeValor(mesPedido) : null;
-  const mes = rango?.valor;
-  if (rango) {
-    desde = rango.desde;
-    hasta = rango.hasta;
-  }
+  // El tramo viaja de una solapa a la otra, pero cada una tiene su propio
+  // valor por defecto y eso hay que respetarlo: el listado sin fechas es
+  // "todo el historial" y la hoja de armado sin fechas es "hoy". Por eso,
+  // viniendo de armar se manda el tramo ya resuelto (si no, el listado
+  // saltaría de la hoja de hoy a los pedidos de todos los tiempos), y viniendo
+  // del listado se manda solo lo que esté puesto de verdad.
+  const delMes = parametros.mes ? mesDesdeValor(parametros.mes) : null;
+  const tramoDelListado = {
+    desde: delMes?.desde ?? parametros.desde,
+    hasta: delMes?.hasta ?? parametros.hasta,
+  };
+  const tramo = armar ? leerParametrosPlanilla(parametros).rango : tramoDelListado;
 
-  const [{ data: vendedores }, { data: comercios }] = await Promise.all([
-    supabase.from("usuarios").select("id, nombre").eq("rol", "vendedor").order("nombre"),
-    supabase.from("comercios").select("id, codigo, nombre"),
-  ]);
-
-  // Un estado inventado en la URL se ignora, como el mes: mejor mostrar todo
-  // que tumbar la pantalla.
-  const estado = esEstado(estadoPedido) ? estadoPedido : undefined;
-  const soloImpagos = impagos === "1";
-
-  let consulta = supabase
-    .from("pedidos")
-    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en, estado, forma_pago, cobrado_en, sin_qr_motivo")
-    .order("fecha", { ascending: false });
-
-  if (vendedor) consulta = consulta.eq("vendedor_id", vendedor);
-  if (estado) consulta = consulta.eq("estado", estado);
-  // Lo entregado que quedó a cuenta y todavía no se cobró.
-  if (soloImpagos) consulta = consulta.eq("forma_pago", "cuenta_corriente").is("cobrado_en", null);
-  if (desde) consulta = consulta.gte("fecha", desde);
-  if (hasta) consulta = consulta.lte("fecha", `${hasta}T23:59:59`);
-
-  const { data: pedidos, error } = await consulta;
-
-  // pedidos.total es numeric(10,2): PostgREST lo manda como string ("6400.00")
-  // para no perder precisión. Sumarlo con + sin convertir concatenaría texto
-  // en vez de sumar números.
-  const totalPeriodo = (pedidos ?? []).reduce(
-    (acumulado, pedido) => acumulado + Number(pedido.total),
-    0
-  );
-
-  const hayFiltro = Boolean(vendedor || desde || hasta || mes || estado || soloImpagos);
-
-  // Lo que falta cobrar del período que se está viendo.
-  const aCobrar = (pedidos ?? [])
-    .filter((p) => p.forma_pago === "cuenta_corriente" && !p.cobrado_en)
-    .reduce((total, p) => total + Number(p.total), 0);
+  const enlace = (vista: string | null) => {
+    const partes = new URLSearchParams();
+    if (vista) partes.set("ver", vista);
+    // Un tramo que es exactamente el día de hoy no se escribe: es el valor por
+    // defecto de la hoja de armado y ensuciaría el enlace sin cambiar nada.
+    const hoy = diaArgentina();
+    if (tramo.desde && tramo.hasta && !(tramo.desde === hoy && tramo.hasta === hoy)) {
+      partes.set("desde", tramo.desde);
+      partes.set("hasta", tramo.hasta);
+    }
+    const consulta = partes.toString();
+    return consulta ? `/pedidos?${consulta}` : "/pedidos";
+  };
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-stone-900">Pedidos</h1>
-        {/* Acá es donde se la vino a buscar: esta pantalla es para revisar
-            pedido por pedido, la planilla es para armarlos todos juntos. */}
-        <Link href="/planilla" className={estilos.botonSecundario}>
-          Planilla para armar
-        </Link>
+      <h1 className="text-xl font-semibold text-stone-900">Pedidos</h1>
+
+      <div className="flex gap-1 border-b border-stone-200">
+        <Solapa href={enlace(null)} activa={!armar}>
+          La lista
+        </Solapa>
+        <Solapa href={enlace(VISTA_ARMAR)} activa={armar}>
+          Para armar
+        </Solapa>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3">
-        <label className="block space-y-1 text-sm">
-          <span className={estilos.etiqueta}>Vendedor</span>
-          <select name="vendedor" defaultValue={vendedor ?? ""} className={estilos.input}>
-            <option value="">Todos</option>
-            {(vendedores ?? []).map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block space-y-1 text-sm">
-          <span className={estilos.etiqueta}>Estado</span>
-          <select name="estado" defaultValue={estado ?? ""} className={estilos.input}>
-            <option value="">Todos</option>
-            {ESTADOS.map((e) => (
-              <option key={e} value={e}>
-                {ETIQUETA_ESTADO[e]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block space-y-1 text-sm">
-          <span className={estilos.etiqueta}>Mes</span>
-          <select name="mes" defaultValue={mes ?? ""} className={estilos.input}>
-            <option value="">Elegir un mes…</option>
-            {ultimosMeses(12).map((opcion) => (
-              <option key={opcion.valor} value={opcion.valor}>
-                {opcion.etiqueta}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block space-y-1 text-sm">
-          <span className={estilos.etiqueta}>Desde</span>
-          <input type="date" name="desde" defaultValue={desde ?? ""} className={estilos.input} />
-        </label>
-
-        <label className="block space-y-1 text-sm">
-          <span className={estilos.etiqueta}>Hasta</span>
-          <input type="date" name="hasta" defaultValue={hasta ?? ""} className={estilos.input} />
-        </label>
-
-        <button type="submit" className={estilos.botonSecundario}>
-          Filtrar
-        </button>
-        {hayFiltro ? (
-          <Link href="/pedidos" className="text-sm text-stone-500 underline hover:text-stone-900">
-            Sacar filtros
-          </Link>
-        ) : null}
-      </form>
-      {aCobrar > 0 && !soloImpagos ? (
-        <Link
-          href="/pedidos?impagos=1"
-          className="block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100"
-        >
-          <span className="font-medium">
-            Quedan {formatearPrecio(aCobrar)} sin cobrar
-          </span>{" "}
-          en pedidos entregados a cuenta. Ver cuáles →
-        </Link>
-      ) : null}
-
-      {mes ? (
-        <p className="text-xs text-stone-500">
-          Mostrando el mes elegido: se ignoran Desde/Hasta si también están cargados.
-        </p>
-      ) : null}
-
-      {error ? (
-        <div className={`${estilos.tarjeta} overflow-hidden`}>
-          <EstadoVacio>No se pudieron cargar los pedidos: {error.message}</EstadoVacio>
-        </div>
+      {armar ? (
+        <VistaParaArmar supabase={supabase} parametros={parametros} />
       ) : (
-        <Tabla
-          filas={pedidos ?? []}
-          clave={(pedido) => pedido.id}
-          vacio="No hay pedidos que coincidan con el filtro."
-          columnas={[
-            {
-              encabezado: "Comercio",
-              principal: true,
-              celda: (pedido) => {
-                const comercio = (comercios ?? []).find((c) => c.id === pedido.comercio_id);
-                return (
-                  <Link href={`/pedidos/${pedido.id}`} className="hover:underline">
-                    {comercio ? `${comercio.codigo} · ${comercio.nombre}` : "—"}
-                    {pedido.corregido_en ? (
-                      <span className="ml-1.5 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 align-middle">
-                        corregido
-                      </span>
-                    ) : null}
-                    {/* El pedido se carga escaneando el QR del comercio. Este
-                        se cargó sin escanearlo, y eso es justamente lo que hay
-                        que poder ver de un vistazo. */}
-                    {pedido.sin_qr_motivo ? (
-                      <span
-                        title={pedido.sin_qr_motivo}
-                        className="ml-1.5 inline-flex rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 align-middle"
-                      >
-                        sin QR
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              },
-            },
-            {
-              encabezado: "Estado",
-              celda: (pedido) => (
-                <span className="flex flex-wrap items-center gap-1">
-                  <PastillaEstado estado={pedido.estado} />
-                  <PastillaImpago formaPago={pedido.forma_pago} cobradoEn={pedido.cobrado_en} />
-                </span>
-              ),
-            },
-            {
-              encabezado: "Cobro",
-              soloEscritorio: true,
-              celda: (pedido) => (
-                <TextoCobro
-                  estado={pedido.estado}
-                  formaPago={pedido.forma_pago}
-                  cobradoEn={pedido.cobrado_en}
-                />
-              ),
-            },
-            { encabezado: "Fecha", celda: (pedido) => formatearFechaHora(pedido.fecha) },
-            {
-              encabezado: "Vendedor",
-              celda: (pedido) =>
-                (vendedores ?? []).find((v) => v.id === pedido.vendedor_id)?.nombre ?? "—",
-            },
-            { encabezado: "Total", celda: (pedido) => formatearPrecio(Number(pedido.total)) },
-          ]}
-        />
+        <VistaLista supabase={supabase} parametros={parametros} />
       )}
-
-      <p className="text-sm text-stone-500">
-        {(pedidos ?? []).length} pedidos · {formatearPrecio(totalPeriodo)} en total
-      </p>
     </>
+  );
+}
+
+function Solapa({
+  href,
+  activa,
+  children,
+}: {
+  href: string;
+  activa: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      // El subrayado grueso y no un color de fondo: en una barra de dos, el
+      // fondo se lee como botón y hace dudar de cuál está puesta.
+      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+        activa
+          ? "border-stone-900 text-stone-900"
+          : "border-transparent text-stone-500 hover:text-stone-900"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }

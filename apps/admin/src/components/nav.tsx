@@ -8,15 +8,14 @@ const SECCIONES = [
   { href: "/comercios", etiqueta: "Comercios" },
   { href: "/mapa", etiqueta: "Mapa" },
   { href: "/productos", etiqueta: "Productos" },
+  // La planilla para armar vive adentro, como una solapa: es el mismo dato
+  // con otro recorte, y tenerla aparte obligaba a elegir en el menú antes de
+  // saber qué se venía a hacer.
   { href: "/pedidos", etiqueta: "Pedidos" },
-  // Justo detrás de Pedidos, que es donde se la busca. Ojo con el orden y con
-  // la ruta: lo activo se marca con startsWith, así que si la planilla
-  // colgara de /comercios se encenderían dos ítems a la vez.
-  { href: "/planilla", etiqueta: "Planilla" },
   { href: "/cobertura", etiqueta: "Cobertura" },
-  { href: "/estadisticas", etiqueta: "Estadísticas" },
-  { href: "/comisiones", etiqueta: "Comisiones" },
-  { href: "/reportes", etiqueta: "Reporte" },
+  // Estadísticas, Comisiones y Reporte eran tres secciones que contestaban
+  // casi lo mismo, cada una con su propio selector de fecha. Ahora es una.
+  { href: "/numeros", etiqueta: "Números" },
   { href: "/usuarios", etiqueta: "Usuarios" },
 ];
 

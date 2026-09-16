@@ -45,7 +45,7 @@ export default async function PaginaComercios({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-stone-900">Comercios</h1>
         <div className="flex gap-2">
-          <Link href="/planilla" className={estilos.botonSecundario}>
+          <Link href="/pedidos?ver=armar" className={estilos.botonSecundario}>
             Planilla para armar
           </Link>
           <Link href="/comercios/imprimir-qr" className={estilos.botonSecundario}>

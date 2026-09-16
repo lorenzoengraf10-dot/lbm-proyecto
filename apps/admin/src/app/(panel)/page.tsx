@@ -108,7 +108,7 @@ export default async function PaginaInicio() {
               // El atajo que convierte "hay 12 pedidos por preparar" en la hoja
               // lista para imprimir, sin pasar por ninguna pantalla intermedia.
               <Link
-                href="/planilla?falta=1&solo=1"
+                href="/pedidos?ver=armar&falta=1&solo=1"
                 className="rounded-lg border border-stone-200 px-4 py-2 text-sm text-stone-700 hover:bg-stone-50"
               >
                 Planilla para armar →
@@ -160,8 +160,14 @@ export default async function PaginaInicio() {
             Semana en curso{" "}
             <span className="font-normal text-stone-500">({etiquetaSemana(semana)})</span>
           </p>
-          <Link href="/reportes" className="text-sm text-stone-600 underline hover:text-stone-900">
-            Ver el reporte
+          {/* Al tramo exacto de esta semana, que es de lo que habla la
+              tarjeta: mandarlo a "todo el historial" daría otros números
+              justo debajo de estos. */}
+          <Link
+            href={`/numeros?desde=${semana.lunes}&hasta=${semana.domingo}`}
+            className="text-sm text-stone-600 underline hover:text-stone-900"
+          >
+            Ver los números
           </Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">

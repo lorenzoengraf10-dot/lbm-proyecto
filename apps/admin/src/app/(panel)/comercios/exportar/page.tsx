@@ -19,5 +19,5 @@ export default async function ExportarSeMudo({
     if (typeof valor === "string") parametros.set(clave, valor);
   }
   const consulta = parametros.toString();
-  redirect(consulta ? `/planilla?${consulta}` : "/planilla");
+  redirect(consulta ? `/pedidos?ver=armar&${consulta}` : "/pedidos?ver=armar");
 }
