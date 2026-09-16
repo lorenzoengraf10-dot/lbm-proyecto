@@ -196,6 +196,12 @@ Un kilo y una docena no se pueden sumar juntos. Cada celda del pedido trae su un
 
 Además del color cambia el tamaño, así que impreso en blanco y negro, o para quien distingue mal los colores, el punto más grande sigue siendo el que vendió. Tocando uno se abre su globo con la dirección, la zona, cuánto compró y un enlace a la ficha.
 
+### El fondo: foto o calles
+
+El mapa arranca en **foto satelital** (Esri), que para esto es lo que sirve: una despensa de barrio se reconoce por el techo y la vereda, no por el nombre de la calle. Arriba a la derecha hay un selector para pasar a **Calles** (OpenStreetMap), que es lo que hay que usar para leer una dirección, porque la foto no trae los nombres. Los dos mapas del panel —el de la cartera y el de marcar el punto de un comercio— usan el mismo fondo, para que marcar la puerta en uno y buscarla en el otro se vea igual.
+
+Si no carga **ninguna** imagen, el mapa lo dice en vez de quedar gris con los puntos flotando: el gris es el fondo de Leaflet cuando los azulejos no llegan, y sin aviso no hay forma de saber si es un problema de conexión, un bloqueador del navegador o que el pueblo no tiene fotos. El aviso espera unos segundos y solo aparece cuando no entró ni una: en los bordes del mapa siempre falla alguna y avisar por eso sería inventar un problema.
+
 Abajo va el resumen **por zona**: cuántos comercios tiene cada parte del pueblo, a cuántos se visitó, cuántos compraron y cuánto se vendió. Eso es el estudio de mercado propiamente dicho — el mapa muestra *dónde*, la tabla muestra *cuánto*. Se arma sobre todos los comercios, tengan punto o no: uno existe aunque nadie le haya tomado todavía la ubicación.
 
 ### De dónde sale la ubicación

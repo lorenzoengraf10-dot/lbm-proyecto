@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { estilos } from "@/components/ui";
 import { CENTRO_PATAGONES } from "@/lib/mapa";
+import { AVISO_SIN_AZULEJOS, armarCapas } from "@/lib/mapa-capas";
 import { ESTADO_INICIAL } from "@/lib/formularios";
 import { guardarUbicacionComercio } from "../actions";
 
@@ -33,6 +34,7 @@ function MapaElegirPunto({
   alElegir: (punto: Punto) => void;
 }) {
   const contenedor = useRef<HTMLDivElement>(null);
+  const [sinAzulejos, setSinAzulejos] = useState(false);
   // El mapa se arma una sola vez; mover la marca después no lo rearma, porque
   // rearmarlo perdería el zoom y el encuadre justo mientras se está buscando
   // la puerta.
@@ -54,13 +56,11 @@ function MapaElegirPunto({
         punto ? 17 : 14
       );
 
-      // Lo único que sale a internet son los azulejos: el servidor de mapas
-      // nunca ve qué comercio es, solo qué pedazo del mundo se está mirando.
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution:
-          '&copy; colaboradores de <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(mapa);
+      // Arranca en foto: para marcar la puerta de una despensa de barrio, ver
+      // el techo y la vereda sirve mil veces más que el dibujo de la calle.
+      const capas = armarCapas(L, () => setSinAzulejos(true));
+      capas.inicial.addTo(mapa);
+      capas.control.addTo(mapa);
 
       const dibujar = (donde: Punto) => {
         if (!mapa) return;
@@ -99,12 +99,21 @@ function MapaElegirPunto({
   }, [alElegir]);
 
   return (
-    <div
-      ref={contenedor}
-      className="h-72 w-full rounded-md border border-stone-200"
-      // Leaflet posiciona todo con absolute; sin esto se sale de la tarjeta.
-      style={{ position: "relative", zIndex: 0 }}
-    />
+    <div className="space-y-2">
+      {/* Acá avisar importa todavía más que en el mapa de la cartera: sobre un
+          cuadro gris no hay forma de saber dónde se está tocando. */}
+      {sinAzulejos ? (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {AVISO_SIN_AZULEJOS} Mientras tanto podés escribir las coordenadas acá abajo.
+        </p>
+      ) : null}
+      <div
+        ref={contenedor}
+        className="h-72 w-full rounded-md border border-stone-200"
+        // Leaflet posiciona todo con absolute; sin esto se sale de la tarjeta.
+        style={{ position: "relative", zIndex: 0 }}
+      />
+    </div>
   );
 }
 

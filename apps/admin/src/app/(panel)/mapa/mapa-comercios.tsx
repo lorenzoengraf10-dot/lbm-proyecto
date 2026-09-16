@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { COLORES, type PuntoComercio } from "@/lib/mapa";
+import { AVISO_SIN_AZULEJOS, armarCapas } from "@/lib/mapa-capas";
 
 const formatoPesos = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -56,6 +57,7 @@ export function MapaComercios({
   centro: { lat: number; lng: number };
 }) {
   const contenedor = useRef<HTMLDivElement>(null);
+  const [sinAzulejos, setSinAzulejos] = useState(false);
 
   useEffect(() => {
     if (!contenedor.current) return;
@@ -71,16 +73,9 @@ export function MapaComercios({
         14
       );
 
-      // Los azulejos del mapa son lo único que sale a internet. Nunca viaja
-      // qué comercios hay ni qué pidieron: el servidor de mapas solo ve qué
-      // pedazo del mundo se está mirando.
-      //
-      // La atribución es obligatoria por las condiciones de uso de
-      // OpenStreetMap, así que no se saca.
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; colaboradores de <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(mapa);
+      const capas = armarCapas(L, () => setSinAzulejos(true));
+      capas.inicial.addTo(mapa);
+      capas.control.addTo(mapa);
 
       const dibujados: import("leaflet").CircleMarker[] = [];
       for (const punto of puntos) {
@@ -118,12 +113,22 @@ export function MapaComercios({
   }, [puntos, centro]);
 
   return (
-    <div
-      ref={contenedor}
-      className="h-[70vh] min-h-80 w-full rounded-lg border border-stone-200"
-      // Leaflet dibuja todo adentro con posición absoluta; sin esto, los
-      // globos se salen de la tarjeta.
-      style={{ position: "relative", zIndex: 0 }}
-    />
+    <div className="space-y-2">
+      {/* Sin esto, cuando los azulejos no llegan el mapa queda gris con los
+          puntos flotando y no hay forma de saber si es un problema o si el
+          pueblo no tiene fotos. */}
+      {sinAzulejos ? (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {AVISO_SIN_AZULEJOS}
+        </p>
+      ) : null}
+      <div
+        ref={contenedor}
+        className="h-[70vh] min-h-80 w-full rounded-lg border border-stone-200"
+        // Leaflet dibuja todo adentro con posición absoluta; sin esto, los
+        // globos se salen de la tarjeta.
+        style={{ position: "relative", zIndex: 0 }}
+      />
+    </div>
   );
 }
