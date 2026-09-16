@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { formatearFechaHora } from "@lbm/shared";
+import { formatearFechaHora, numeroDeLaBase } from "@lbm/shared";
 import { BotonEliminar } from "@/components/boton-eliminar";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Etiqueta, estilos } from "@/components/ui";
@@ -8,6 +8,7 @@ import { requerirAdmin } from "@/lib/auth";
 import { cartelQr } from "@/lib/qr";
 import { actualizarComercio, cambiarEstadoComercio, eliminarComercio } from "../actions";
 import { FormularioComercio } from "../formulario";
+import { UbicacionComercio } from "./ubicacion";
 
 export default async function PaginaEditarComercio({
   params,
@@ -51,25 +52,38 @@ export default async function PaginaEditarComercio({
           textoBoton="Guardar cambios"
           zonas={zonas}
         />
-        {/* El punto del mapa no se edita acá: lo toma el repartidor con el GPS
-            del celular parado en la puerta, que es mil veces más exacto que
-            escribir dos números a mano. Acá solo se dice si ya está. */}
-        <p className="mt-4 text-sm text-stone-500">
-          {comercio.lat !== null ? (
-            <>
-              Ubicación en el mapa cargada
-              {comercio.ubicacion_tomada_en
-                ? ` el ${formatearFechaHora(comercio.ubicacion_tomada_en)}`
-                : ""}
-              .{" "}
-              <Link href="/mapa" className="underline hover:text-stone-900">
-                Verla en el mapa
-              </Link>
-            </>
-          ) : (
-            "Todavía sin ubicación en el mapa. La toma el repartidor con el GPS del celular al pasar por la puerta."
-          )}
-        </p>
+      </div>
+
+      <div className={`${estilos.tarjeta} space-y-3 p-5`}>
+        <div>
+          <p className="text-sm font-medium text-stone-900">Dónde queda</p>
+          <p className="text-sm text-stone-500">
+            {comercio.lat !== null ? (
+              <>
+                Ya está en el mapa
+                {comercio.ubicacion_tomada_en
+                  ? `, cargado el ${formatearFechaHora(comercio.ubicacion_tomada_en)}`
+                  : ""}
+                .{" "}
+                <Link href="/mapa" className="underline hover:text-stone-900">
+                  Verlo entre los demás
+                </Link>
+              </>
+            ) : (
+              // El camino normal sigue siendo el repartidor con el GPS en la
+              // puerta, que es más exacto que cualquier cosa hecha de memoria.
+              // Esto es para los que ya se saben y para arreglar los mal puestos.
+              "Todavía no está en el mapa. Lo puede tomar el repartidor con el GPS al pasar, o lo podés marcar vos acá."
+            )}
+          </p>
+        </div>
+        {/* numeroDeLaBase porque lat/lng son numeric y PostgREST las manda
+            como string, aunque el tipo generado diga number. */}
+        <UbicacionComercio
+          comercioId={comercio.id}
+          lat={numeroDeLaBase(comercio.lat)}
+          lng={numeroDeLaBase(comercio.lng)}
+        />
       </div>
 
       <div className={`${estilos.tarjeta} flex flex-wrap items-center gap-5 p-5`}>

@@ -1,4 +1,4 @@
-import { ordenarPorCodigo, type RangoDias } from "@lbm/shared";
+import { numeroDeLaBase, ordenarPorCodigo, type RangoDias } from "@lbm/shared";
 import type { SesionAdmin } from "./auth";
 
 /** Carmen de Patagones, para centrar el mapa cuando todavía no hay puntos. */
@@ -139,9 +139,8 @@ export async function armarMapa(
       nombre: comercio.nombre,
       direccion: comercio.direccion,
       zona: comercio.zona ?? SIN_ZONA,
-      // Number() porque numeric llega como string desde PostgREST.
-      lat: comercio.lat === null ? null : Number(comercio.lat),
-      lng: comercio.lng === null ? null : Number(comercio.lng),
+      lat: numeroDeLaBase(comercio.lat),
+      lng: numeroDeLaBase(comercio.lng),
       activo: comercio.activo,
       estado: pedidosDe ? "pidio" : visitasDe > 0 ? "visitado" : "sin-visitar",
       visitas: visitasDe,

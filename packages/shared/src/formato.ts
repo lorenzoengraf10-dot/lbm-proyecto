@@ -39,3 +39,20 @@ const formatoCantidad = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 
 export function formatearCantidad(valor: number | string): string {
   return formatoCantidad.format(Number(valor));
 }
+
+/**
+ * Un `numeric` de Postgres, como número de verdad.
+ *
+ * PostgREST manda las columnas numeric como string ("−40.801234") para no
+ * perder precisión, pero los tipos generados las declaran `number`: el
+ * compilador no avisa nada y el error aparece recién al usarlas, con un
+ * `.toFixed is not a function` o —peor— con una suma que concatena texto. Ya
+ * pasó con pedidos.total, con comercios.lat y con el total del mapa.
+ *
+ * Por eso el parámetro acepta los dos: es lo que de verdad llega.
+ */
+export function numeroDeLaBase(valor: number | string | null | undefined): number | null {
+  if (valor === null || valor === undefined) return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+}

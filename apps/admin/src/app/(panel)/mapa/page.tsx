@@ -51,7 +51,8 @@ export default async function PaginaMapa({
 
       <p className="text-sm text-stone-500">
         Cada comercio con un punto, del color de cómo le fue en el período. Los puntos los va
-        cargando el repartidor con el GPS del celular al pasar por cada puerta.
+        cargando el repartidor con el GPS al pasar por cada puerta, y los podés marcar o corregir
+        vos desde la ficha del comercio.
       </p>
 
       <form className="flex flex-wrap items-end gap-3">
@@ -183,7 +184,8 @@ export default async function PaginaMapa({
             Todavía sin ubicación ({faltan})
           </h2>
           <p className="text-sm text-stone-500">
-            No se pueden dibujar hasta que alguien pase y toque “Guardar ubicación” en la app.
+            No se dibujan hasta que tengan punto. Lo toma el repartidor al pasar, o entrá vos a la
+            ficha y marcalo en el mapa.
           </p>
           <div className={`${estilos.tarjeta} divide-y divide-stone-100`}>
             {mapa.sinUbicacion.map((punto) => (

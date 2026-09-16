@@ -1,6 +1,6 @@
 "use client";
 
-import { ordenarPorCodigo } from "@lbm/shared";
+import { numeroDeLaBase, ordenarPorCodigo } from "@lbm/shared";
 import { crearClienteNavegador } from "./supabase-browser";
 import {
   encolar,
@@ -170,9 +170,13 @@ export async function refrescarCatalogo(): Promise<void> {
     // PostgREST, para no perder precisión. Se normaliza acá, al guardar, en
     // vez de que cada pantalla se acuerde — el tipo ComercioLocal dice
     // number | null y tiene que ser cierto.
+    //
+    // lng no se baja a propósito: acá solo hace falta saber si el comercio ya
+    // está en el mapa, y la base garantiza que lat y lng están las dos o
+    // ninguna, así que lat sola alcanza. El mapa se dibuja en el panel.
     const normalizados = ordenarPorCodigo(comercios).map((comercio) => ({
       ...comercio,
-      lat: comercio.lat === null ? null : Number(comercio.lat),
+      lat: numeroDeLaBase(comercio.lat),
     }));
     // CP2 antes que CP10: el vendedor busca por código en la lista.
     await guardarCatalogo(normalizados, productos);
