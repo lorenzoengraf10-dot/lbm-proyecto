@@ -129,10 +129,13 @@ self.addEventListener("fetch", (evento) => {
         const enCache = await caches.match(solicitud);
         if (enCache) return enCache;
 
-        // Navegación a una ruta que nunca se abrió con señal: se sirve el
-        // listado de comercios, que es la pantalla principal.
+        // Navegación a una ruta que nunca se abrió con señal: se sirve la
+        // pantalla principal, que es el escáner — el pedido arranca ahí y la
+        // app abre ahí. El listado queda de segundo respaldo por si el
+        // escáner todavía no está guardado.
         if (solicitud.mode === "navigate") {
-          const respaldo = await caches.match("/comercios");
+          const respaldo =
+            (await caches.match("/escanear")) ?? (await caches.match("/comercios"));
           if (respaldo) return respaldo;
         }
         return Response.error();

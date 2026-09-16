@@ -51,7 +51,9 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && esRutaPublica) {
-    return redirigir(request, response, "/comercios");
+    // A la cámara, igual que la raíz: entrar y quedar apuntando al cartel es
+    // el camino de todos los días.
+    return redirigir(request, response, "/escanear");
   }
 
   return response;

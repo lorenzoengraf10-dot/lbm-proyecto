@@ -6,11 +6,14 @@ import { cerrarSesion } from "@/lib/sesion";
 import { useDatosLocales } from "./datos-locales";
 
 // Cargar un pedido es lo que el repartidor hace todo el día; el resto es
-// para mirar. Por eso va primero y se llama por lo que hace, no por lo que
-// muestra ("Comercios" no decía que ahí se carga el pedido).
+// para mirar. Y desde que el pedido solo se carga escaneando, eso arranca en
+// la cámara: va primera, y es donde abre la app. Atrás queda el listado, que
+// sirve para buscar un comercio o para cargar sin QR cuando el cartel no está
+// — se llama por lo que hace ahí y no por lo que muestra, porque "Comercios"
+// no decía que ahí se carga el pedido.
 const PESTAÑAS = [
-  { href: "/comercios", etiqueta: "Pedido" },
   { href: "/escanear", etiqueta: "Escanear" },
+  { href: "/comercios", etiqueta: "Pedido" },
   { href: "/mis-pedidos", etiqueta: "Mis pedidos" },
   { href: "/planilla", etiqueta: "Planilla" },
   { href: "/resumen", etiqueta: "Resumen" },

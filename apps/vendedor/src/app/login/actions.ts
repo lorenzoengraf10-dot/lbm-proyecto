@@ -132,5 +132,7 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
     await admin.from("intentos_pin").delete().eq("usuario_id", id);
   }
 
-  redirect("/comercios");
+  // A la cámara: entrar y quedar apuntando al cartel es el camino de todos los
+  // días, y el pedido no se carga de otra forma.
+  redirect("/escanear");
 }

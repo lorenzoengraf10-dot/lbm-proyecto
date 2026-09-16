@@ -17,6 +17,12 @@ export function EscanerQr({ onDecodificado }: { onDecodificado: (texto: string) 
   useEffect(() => {
     let stream: MediaStream | null = null;
     let cuadroSolicitado: number | null = null;
+    // Pedir la cámara tarda: el permiso, y después el encendido. Si en ese
+    // rato se sale de la pantalla, la limpieza ya corrió y el stream llega
+    // después, sin nadie que lo apague — la cámara del celular quedaba
+    // prendida hasta cerrar la pestaña. Pasa seguido ahora que la app abre
+    // justo acá: se abre, se toca "Mis pedidos" y listo.
+    let cancelado = false;
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
     const contexto = canvas.getContext("2d", { willReadFrequently: true });
@@ -44,6 +50,10 @@ export function EscanerQr({ onDecodificado }: { onDecodificado: (texto: string) 
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "environment" } })
       .then((s) => {
+        if (cancelado) {
+          s.getTracks().forEach((track) => track.stop());
+          return;
+        }
         stream = s;
         if (video) {
           video.srcObject = s;
@@ -52,10 +62,12 @@ export function EscanerQr({ onDecodificado }: { onDecodificado: (texto: string) 
         }
       })
       .catch(() => {
+        if (cancelado) return;
         setError("No se pudo acceder a la cámara. Revisá los permisos del navegador.");
       });
 
     return () => {
+      cancelado = true;
       if (cuadroSolicitado !== null) cancelAnimationFrame(cuadroSolicitado);
       stream?.getTracks().forEach((track) => track.stop());
     };

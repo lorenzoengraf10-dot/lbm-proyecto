@@ -243,6 +243,8 @@ El QR es la única prueba de que el repartidor estuvo parado en la puerta. Eligi
 
 El candado tiene salida, porque un cartel despegado no puede costar una venta: se puede **seguir sin QR**, pero hay que escribir por qué (mínimo tres letras) y el pedido queda marcado como **sin QR** en el listado del panel, con el motivo a la vista en la ficha. La base también lo exige, así que no hay forma de saltearlo desde afuera de la app.
 
+**La app abre en la cámara.** Escanear es el arranque de todo, así que abrir en el listado era un toque de más en lo único que el repartidor hace cincuenta veces por mañana. El listado queda en la segunda pestaña, para buscar un comercio o para cargar sin QR cuando el cartel no está.
+
 El escáner anda sin señal: el código se resuelve contra la cartera guardada en el celular, y la pantalla se guarda en el celular apenas se abre la app con señal, antes de salir.
 
 ## Estructura
