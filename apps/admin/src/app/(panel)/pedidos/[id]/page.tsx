@@ -15,7 +15,7 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
   const { data: pedido } = await supabase
     .from("pedidos")
     .select(
-      "id, comercio_id, vendedor_id, fecha, total, corregido_en, corregido_por, motivo_correccion, estado, forma_pago, cobrado_en, comision_pct"
+      "id, comercio_id, vendedor_id, fecha, total, corregido_en, corregido_por, motivo_correccion, estado, forma_pago, cobrado_en, comision_pct, sin_qr_motivo"
     )
     .eq("id", id)
     .maybeSingle();
@@ -68,6 +68,16 @@ export default async function PaginaPedido({ params }: { params: Promise<{ id: s
         formaPago={pedido.forma_pago}
         cobradoEn={pedido.cobrado_en}
       />
+
+      {/* El camino normal es escanear el QR pegado en el comercio, que es la
+          única prueba de que el repartidor estuvo ahí. Este se cargó eligiendo
+          el comercio de la lista, así que el motivo lo escribió él. */}
+      {pedido.sin_qr_motivo ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          <span className="font-medium">Cargado sin escanear el QR.</span>{" "}
+          Motivo que dejó el repartidor: “{pedido.sin_qr_motivo}”.
+        </div>
+      ) : null}
 
       {pedido.corregido_en ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

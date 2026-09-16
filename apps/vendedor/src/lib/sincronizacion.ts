@@ -89,6 +89,7 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
       p_fecha_hora: pendiente.fechaHora,
       p_pedido_id: pendiente.pedidoId,
       p_items: pendiente.items,
+      p_sin_qr_motivo: pendiente.sinQrMotivo ?? null,
     });
 
     if (!error) {

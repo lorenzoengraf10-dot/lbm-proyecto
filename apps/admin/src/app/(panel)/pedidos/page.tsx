@@ -44,7 +44,7 @@ export default async function PaginaPedidos({
 
   let consulta = supabase
     .from("pedidos")
-    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en, estado, forma_pago, cobrado_en")
+    .select("id, comercio_id, vendedor_id, fecha, total, corregido_en, estado, forma_pago, cobrado_en, sin_qr_motivo")
     .order("fecha", { ascending: false });
 
   if (vendedor) consulta = consulta.eq("vendedor_id", vendedor);
@@ -177,6 +177,17 @@ export default async function PaginaPedidos({
                     {pedido.corregido_en ? (
                       <span className="ml-1.5 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 align-middle">
                         corregido
+                      </span>
+                    ) : null}
+                    {/* El pedido se carga escaneando el QR del comercio. Este
+                        se cargó sin escanearlo, y eso es justamente lo que hay
+                        que poder ver de un vistazo. */}
+                    {pedido.sin_qr_motivo ? (
+                      <span
+                        title={pedido.sin_qr_motivo}
+                        className="ml-1.5 inline-flex rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 align-middle"
+                      >
+                        sin QR
                       </span>
                     ) : null}
                   </Link>

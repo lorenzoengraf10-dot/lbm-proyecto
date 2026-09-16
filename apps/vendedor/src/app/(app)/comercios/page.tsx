@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BotonUbicacion } from "@/components/boton-ubicacion";
 import { FormularioPedido, type ItemPedido } from "@/components/formulario-pedido";
@@ -27,15 +28,28 @@ export default function PaginaComercios() {
   const [busqueda, setBusqueda] = useState("");
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  // Por qué se está cargando sin escanear el QR. null = todavía no se pidió la
+  // excepción; con texto, ya se explicó y el pedido se puede cargar marcado.
+  const [motivoSinQr, setMotivoSinQr] = useState<string | null>(null);
+  const [escribiendoMotivo, setEscribiendoMotivo] = useState(false);
+  const [borradorMotivo, setBorradorMotivo] = useState("");
 
   // Si se llegó desde el escáner, ese comercio manda hasta que se elija otra
   // cosa. Se deriva en el render en vez de copiarlo a estado con un efecto.
   const elegido = seleccion ?? comercioRecienEscaneado;
   const comercio = comercios.find((c) => c.id === elegido) ?? null;
 
+  // El QR es la única prueba de que el repartidor estuvo parado en la puerta.
+  // Elegido de la lista no lo es, y ahí hace falta explicar por qué.
+  const porQr = seleccion === null && comercioRecienEscaneado !== null;
+  const puedeCargar = porQr || motivoSinQr !== null;
+
   function volverAlListado() {
     setSeleccion(null);
     elegirComercio(null);
+    setMotivoSinQr(null);
+    setEscribiendoMotivo(false);
+    setBorradorMotivo("");
   }
 
   const visibles = useMemo(() => {
@@ -61,6 +75,7 @@ export default function PaginaComercios() {
       fechaHora: new Date().toISOString(),
       pedidoId: crypto.randomUUID(),
       items: items.map((item) => ({ producto_id: item.productoId, cantidad: item.cantidad })),
+      sinQrMotivo: motivoSinQr,
     });
 
     // Si el servidor lo rechazó, el vendedor se tiene que enterar ahora, con
@@ -95,6 +110,7 @@ export default function PaginaComercios() {
       fechaHora: new Date().toISOString(),
       pedidoId: null,
       items: [],
+      sinQrMotivo: motivoSinQr,
     });
     await recargar();
     volverAlListado();
@@ -151,17 +167,77 @@ export default function PaginaComercios() {
           alGuardar={() => void recargar()}
         />
 
-        {/* Pasar sin pedido es la excepción, no una opción al mismo nivel: va al
-            pie del formulario, que además es el único que sabe si hay
-            cantidades cargadas que se perderían. */}
-        <FormularioPedido
-          productos={productos}
-          ultimoPedido={ultimosPedidos[comercio.id]}
-          textoBoton="Confirmar pedido"
-          destino=""
-          onGuardar={guardarPedido}
-          onSinPedido={() => void registrarSoloVisita()}
-        />
+        {/* El candado del QR. Escaneado, se carga y listo. Elegido de la
+            lista, primero hay que decir por qué no se escaneó: el QR es la
+            única prueba de que el repartidor estuvo en la puerta, y sin eso
+            "visitado" no quiere decir nada. La salida existe igual porque un
+            cartel despegado no puede costar una venta. */}
+        {!puedeCargar ? (
+          <div className={`${estilos.tarjeta} space-y-3 p-4`}>
+            <p className="text-sm text-stone-700">
+              Para cargarle el pedido hay que <strong>escanear el QR</strong> del comercio.
+            </p>
+            <Link href="/escanear" className={`block text-center ${estilos.boton}`}>
+              Escanear el QR
+            </Link>
+
+            {escribiendoMotivo ? (
+              <div className="space-y-2">
+                <label className="block space-y-1">
+                  <span className={estilos.etiqueta}>¿Por qué no se puede escanear?</span>
+                  <textarea
+                    value={borradorMotivo}
+                    onChange={(e) => setBorradorMotivo(e.target.value)}
+                    rows={2}
+                    maxLength={200}
+                    placeholder="Ej.: se despegó el cartel, está tapado por la heladera…"
+                    className={estilos.input}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={borradorMotivo.trim().length < 3}
+                  onClick={() => setMotivoSinQr(borradorMotivo.trim())}
+                  className={`w-full ${estilos.botonSecundario}`}
+                >
+                  Seguir sin QR
+                </button>
+                <p className="text-xs text-stone-400">
+                  El pedido va a quedar marcado como cargado sin QR, con este motivo.
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEscribiendoMotivo(true)}
+                className="block w-full text-sm text-stone-500 underline"
+              >
+                No se puede escanear el QR
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            {motivoSinQr !== null ? (
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Este pedido se va a cargar <strong>sin QR</strong>: “{motivoSinQr}”. Va a quedar
+                marcado así en el panel.
+              </p>
+            ) : null}
+
+            {/* Pasar sin pedido es la excepción, no una opción al mismo nivel: va al
+                pie del formulario, que además es el único que sabe si hay
+                cantidades cargadas que se perderían. */}
+            <FormularioPedido
+              productos={productos}
+              ultimoPedido={ultimosPedidos[comercio.id]}
+              textoBoton="Confirmar pedido"
+              destino=""
+              onGuardar={guardarPedido}
+              onSinPedido={() => void registrarSoloVisita()}
+            />
+          </>
+        )}
       </>
     );
   }

@@ -231,6 +231,8 @@ export type Database = {
           cobrado_en: string | null;
           /** Congelado al crear el pedido: cambiarle la comisión al vendedor no toca los pedidos ya hechos. */
           comision_pct: number;
+          /** null = se escaneó el QR. Con texto, por qué se cargó sin escanearlo. */
+          sin_qr_motivo: string | null;
         };
         Insert: {
           id?: string;
@@ -249,6 +251,7 @@ export type Database = {
           cobrado_en?: string | null;
           /** Lo completa trg_set_comision_pct_pedido desde el vendedor si no viene. */
           comision_pct?: number;
+          sin_qr_motivo?: string | null;
         };
         Update: {
           id?: string;
@@ -266,6 +269,7 @@ export type Database = {
           corregido_en?: string | null;
           corregido_por?: string | null;
           motivo_correccion?: string | null;
+          sin_qr_motivo?: string | null;
         };
         Relationships: [
           {
@@ -372,6 +376,8 @@ export type Database = {
           p_fecha_hora: string;
           p_pedido_id: string | null;
           p_items: Json;
+          /** null = se escaneó el QR. Con texto, queda marcado como cargado sin QR. */
+          p_sin_qr_motivo?: string | null;
         };
         Returns: undefined;
       };

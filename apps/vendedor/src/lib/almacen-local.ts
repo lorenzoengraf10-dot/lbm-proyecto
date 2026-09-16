@@ -30,6 +30,12 @@ export interface PendienteCola {
   fechaHora: string;
   pedidoId: string | null;
   items: { producto_id: string; cantidad: number }[];
+  /**
+   * Por qué se cargó sin escanear el QR. null/ausente = se escaneó, que es lo
+   * normal. Viaja en la cola porque el pedido puede quedar guardado en el
+   * celular horas antes de subir, y el motivo es parte del pedido.
+   */
+  sinQrMotivo?: string | null;
   /** Último error de sincronización, para poder mostrarlo. */
   error?: string;
 }
