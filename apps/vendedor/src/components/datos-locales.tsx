@@ -13,9 +13,11 @@ import {
 import {
   leerComercios,
   leerCola,
+  leerDeudas,
   leerProductos,
   leerUltimosPedidos,
   type ComercioLocal,
+  type DeudaLocal,
   type ItemUltimoPedido,
   type PendienteCola,
   type ProductoLocal,
@@ -28,6 +30,8 @@ interface DatosLocales {
   cola: PendienteCola[];
   /** Lo último que pidió cada comercio, por id, para poder repetirlo. */
   ultimosPedidos: Record<string, ItemUltimoPedido[]>;
+  /** Lo que quedó debiendo cada comercio, por id. Sin deuda, no está la clave. */
+  deudas: Record<string, DeudaLocal>;
   cargando: boolean;
   hayConexion: boolean;
   /** Comercio elegido al escanear, para que /comercios lo abra al llegar. */
@@ -117,6 +121,7 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
   const [productos, setProductos] = useState<ProductoLocal[]>([]);
   const [cola, setCola] = useState<PendienteCola[]>([]);
   const [ultimosPedidos, setUltimosPedidos] = useState<Record<string, ItemUltimoPedido[]>>({});
+  const [deudas, setDeudas] = useState<Record<string, DeudaLocal>>({});
   const [cargando, setCargando] = useState(true);
   const comercioRecienEscaneado = useSyncExternalStore(
     suscribirseAlEscaneo,
@@ -134,16 +139,19 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
   );
 
   const leerDeLocal = useCallback(async () => {
-    const [comerciosLocales, productosLocales, colaLocal, ultimos] = await Promise.all([
-      leerComercios(),
-      leerProductos(),
-      leerCola(),
-      leerUltimosPedidos(),
-    ]);
+    const [comerciosLocales, productosLocales, colaLocal, ultimos, deudasLocales] =
+      await Promise.all([
+        leerComercios(),
+        leerProductos(),
+        leerCola(),
+        leerUltimosPedidos(),
+        leerDeudas(),
+      ]);
     setComercios(comerciosLocales);
     setProductos(productosLocales);
     setCola(colaLocal);
     setUltimosPedidos(ultimos);
+    setDeudas(deudasLocales);
   }, []);
 
   const elegirComercio = useCallback((id: string | null) => {
@@ -190,6 +198,7 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
       productos,
       cola,
       ultimosPedidos,
+      deudas,
       cargando,
       hayConexion,
       comercioRecienEscaneado,
@@ -201,6 +210,7 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
       productos,
       cola,
       ultimosPedidos,
+      deudas,
       cargando,
       hayConexion,
       comercioRecienEscaneado,

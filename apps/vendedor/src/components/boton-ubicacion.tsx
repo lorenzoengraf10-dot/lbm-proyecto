@@ -40,6 +40,12 @@ export function BotonUbicacion({
   alGuardar?: () => void;
 }) {
   const [estado, setEstado] = useState<Estado>({ paso: "quieto" });
+  // Al comercio que ya está en el mapa no hay que volver a tomarle el punto
+  // nunca más, pero el botón seguía ocupando el lugar de arriba del pedido —
+  // que es la pantalla que el repartidor abre cincuenta veces por mañana. Se
+  // guarda detrás de una línea chica y se despliega solo si hace falta
+  // (se mudó el comercio, o la primera lectura salió fea).
+  const [desplegado, setDesplegado] = useState(false);
 
   function tomar() {
     if (!navigator.geolocation) {
@@ -94,6 +100,22 @@ export function BotonUbicacion({
   }
 
   const buscando = estado.paso === "buscando";
+  const yaEsta = (yaTiene || estado.paso === "ok") && !desplegado && estado.paso !== "error";
+
+  if (yaEsta) {
+    return (
+      <p className="text-xs text-stone-400">
+        {estado.paso === "ok" ? "Ubicación guardada." : "Este comercio ya está en el mapa."}{" "}
+        <button
+          type="button"
+          onClick={() => setDesplegado(true)}
+          className="underline hover:text-stone-600"
+        >
+          Volver a tomarla
+        </button>
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-1">

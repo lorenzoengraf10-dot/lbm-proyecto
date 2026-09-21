@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { diasDesde, formatearPrecio } from "@lbm/shared";
 import { BotonUbicacion } from "@/components/boton-ubicacion";
 import { FormularioPedido, type ItemPedido } from "@/components/formulario-pedido";
 import { useDatosLocales } from "@/components/datos-locales";
@@ -18,6 +19,7 @@ export default function PaginaComercios() {
     comercios,
     productos,
     ultimosPedidos,
+    deudas,
     cargando,
     comercioRecienEscaneado,
     elegirComercio,
@@ -152,6 +154,12 @@ export default function PaginaComercios() {
             <p className="text-sm text-stone-700">{comercio.direccion}</p>
           ) : null}
         </div>
+
+        {/* Lo que este comercio quedó debiendo, arriba de todo y antes de
+            cargarle nada. Es el único momento en que sirve: el repartidor está
+            en la puerta y puede cobrar. Baja con el catálogo, así que se ve
+            igual sin señal. */}
+        <Deuda deuda={deudas[comercio.id]} />
 
         <BotonUbicacion
           // key por comercio: el aviso de "Ubicación guardada" es del comercio
@@ -295,5 +303,29 @@ export default function PaginaComercios() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * "Este te debe $X".
+ *
+ * En rojo y arriba del pedido a propósito: es una decisión que el repartidor
+ * toma antes de cargar nada —si le sigue fiando o le cobra primero— y si
+ * estuviera abajo la vería cuando ya no le sirve.
+ */
+function Deuda({ deuda }: { deuda: { pesos: number; pedidos: number; desde: string } | undefined }) {
+  if (!deuda || deuda.pesos <= 0) return null;
+
+  const dias = diasDesde(deuda.desde);
+  return (
+    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
+      <p className="text-sm font-medium text-red-900">
+        Debe {formatearPrecio(deuda.pesos)}
+      </p>
+      <p className="text-xs text-red-800">
+        {deuda.pedidos === 1 ? "1 pedido" : `${deuda.pedidos} pedidos`} a cuenta sin cobrar
+        {dias >= 1 ? `, el más viejo de hace ${dias === 1 ? "1 día" : `${dias} días`}` : ""}.
+      </p>
+    </div>
   );
 }

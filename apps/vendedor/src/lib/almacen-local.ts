@@ -154,6 +154,26 @@ export async function leerComercios(): Promise<ComercioLocal[]> {
  */
 export type ItemUltimoPedido = { producto_id: string; cantidad: number };
 
+/**
+ * Lo que un comercio quedó debiendo: pedidos entregados a cuenta corriente
+ * que todavía nadie marcó cobrados.
+ *
+ * Va al celular con el resto del catálogo para que el repartidor lo vea
+ * parado en la puerta, que es el único momento en que le sirve. Sin esto
+ * tenía que acordarse o llamar, y "el cliente dice que ya pagó" no se podía
+ * discutir con nada a mano.
+ *
+ * Son los pedidos de ÉL: las políticas de la base limitan al repartidor a lo
+ * suyo y no se tocaron. Con un solo repartidor es toda la deuda; el día que
+ * haya dos, cada uno ve lo que él dejó a cuenta.
+ */
+export interface DeudaLocal {
+  pesos: number;
+  pedidos: number;
+  /** El más viejo sin cobrar, para poder decir "hace tanto". */
+  desde: string;
+}
+
 export async function guardarUltimosPedidos(
   porComercio: Record<string, ItemUltimoPedido[]>
 ): Promise<void> {
@@ -165,6 +185,16 @@ export async function leerUltimosPedidos(): Promise<Record<string, ItemUltimoPed
     (await conStore<Record<string, ItemUltimoPedido[]>>(CATALOGO, "readonly", (s) =>
       s.get("ultimos-pedidos")
     )) ?? {}
+  );
+}
+
+export async function guardarDeudas(porComercio: Record<string, DeudaLocal>): Promise<void> {
+  await conStore(CATALOGO, "readwrite", (s) => s.put(porComercio, "deudas"));
+}
+
+export async function leerDeudas(): Promise<Record<string, DeudaLocal>> {
+  return (
+    (await conStore<Record<string, DeudaLocal>>(CATALOGO, "readonly", (s) => s.get("deudas"))) ?? {}
   );
 }
 

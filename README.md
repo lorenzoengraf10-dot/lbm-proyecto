@@ -233,6 +233,12 @@ El teléfono resultó no servir: de los cincuenta y tres comercios cargados solo
 
 La columna `telefono` **no se borró** de la base: los que estaban cargados son datos reales que alguien tomó y borrarlos no se puede deshacer. Simplemente salió de las pantallas, y editar una ficha no la pisa. Si algún día vuelve a hacer falta, el dato sigue ahí.
 
+## Lo que el comercio debe, en la puerta
+
+Al abrir el pedido de un comercio, arriba de todo y en rojo, aparece lo que quedó debiendo: los pedidos entregados a cuenta corriente que todavía nadie marcó cobrados, con cuántos son y de hace cuánto viene el más viejo. Va arriba porque es una decisión que el repartidor toma **antes** de cargar nada —si le sigue fiando o le cobra primero— y abajo la vería cuando ya no le sirve.
+
+Baja al celular junto con el catálogo, en el mismo viaje que ya se hacía, así que se ve igual sin señal. Son los pedidos que dejó él a cuenta: las políticas de la base limitan al repartidor a lo suyo y no se tocaron. Con un solo repartidor eso es toda la deuda; el día que haya dos, cada uno ve la que él dejó.
+
 ## QR de los comercios
 
 Cada comercio tiene su cartel de 7×9 cm con el QR, el código y el nombre:

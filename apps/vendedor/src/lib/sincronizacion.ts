@@ -6,6 +6,7 @@ import {
   encolar,
   encolarEstado,
   guardarCatalogo,
+  guardarDeudas,
   guardarPerfil,
   guardarUltimosPedidos,
   leerCola,
@@ -13,6 +14,7 @@ import {
   quitarDeCola,
   quitarEstadoDeCola,
   type CambioEstadoPendiente,
+  type DeudaLocal,
   type PendienteCola,
 } from "./almacen-local";
 
@@ -158,7 +160,11 @@ export async function refrescarCatalogo(): Promise<void> {
       user
         ? supabase
             .from("pedidos")
-            .select("comercio_id, fecha, pedido_items(producto_id, cantidad)")
+            .select(
+              // total, forma_pago y cobrado_en son para la deuda del comercio:
+              // viajan en el mismo viaje que ya se hacía, sin una consulta más.
+              "comercio_id, fecha, total, forma_pago, cobrado_en, pedido_items(producto_id, cantidad)"
+            )
             .eq("vendedor_id", user.id)
             .order("fecha", { ascending: false })
             .limit(300)
@@ -199,5 +205,21 @@ export async function refrescarCatalogo(): Promise<void> {
       }));
     }
     await guardarUltimosPedidos(porComercio);
+
+    // Lo que cada comercio quedó debiendo: entregado a cuenta y sin cobrar.
+    // Se calcula acá, al guardar, y no en cada pantalla: así el celular lo
+    // tiene listo y anda igual sin señal.
+    const deudas: Record<string, DeudaLocal> = {};
+    for (const pedido of pedidos) {
+      if (pedido.forma_pago !== "cuenta_corriente" || pedido.cobrado_en !== null) continue;
+      const actual = deudas[pedido.comercio_id] ?? { pesos: 0, pedidos: 0, desde: pedido.fecha };
+      actual.pesos += Number(pedido.total);
+      actual.pedidos += 1;
+      // Vienen del más nuevo al más viejo, así que el último que entra es el
+      // más viejo: es el que dice hace cuánto que viene debiendo.
+      actual.desde = pedido.fecha;
+      deudas[pedido.comercio_id] = actual;
+    }
+    await guardarDeudas(deudas);
   }
 }
