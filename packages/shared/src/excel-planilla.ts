@@ -46,6 +46,17 @@ const CASILLA = {
   right: BORDE_CASILLA,
 };
 
+export interface OpcionesExcel {
+  /**
+   * Sin la columna de plata. Es la que baja el repartidor: los dueños no
+   * quieren que vea lo que factura el negocio, y esta hoja con los montos es
+   * exactamente eso —todos los comercios del día con lo que gastó cada uno—.
+   * Sin ella sigue sirviendo para lo que la usa: qué hay que cortar y para
+   * quién.
+   */
+  sinPesos?: boolean;
+}
+
 /**
  * La planilla del día en Excel, pensada para imprimir en A4: una fila por
  * comercio con el código, el nombre y lo que pidió escrito un producto atrás
@@ -54,7 +65,10 @@ const CASILLA = {
  * Sale de los mismos números que la pantalla (armarPlanilla), así que no
  * pueden discrepar.
  */
-export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
+export async function excelPlanilla(
+  planilla: Planilla,
+  { sinPesos = false }: OpcionesExcel = {}
+): Promise<ArrayBuffer> {
   const libro = new ExcelJS.Workbook();
   libro.creator = "La Buena Medida";
   libro.created = new Date();
@@ -84,16 +98,23 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   // imprimirla Excel la achicaba a la mitad y no se leía nada. Así que el
   // ancho se fija y al que pidió de más se le sigue el pedido en el renglón
   // de abajo.
+  // Sin la columna de plata sobra su ancho, y entra un producto más por
+  // renglón: la hoja del repartidor queda más corta.
   const celdasPorFila = Math.max(
     3,
     Math.floor(
-      (ANCHO_HOJA - ANCHO_HECHO - ANCHO_CODIGO - ANCHO_NOMBRE - ANCHO_PESOS) / anchoPedido
+      (ANCHO_HOJA - ANCHO_HECHO - ANCHO_CODIGO - ANCHO_NOMBRE - (sinPesos ? 0 : ANCHO_PESOS)) /
+        anchoPedido
     )
   );
   // No hacen falta más celdas que productos pidió el que más pidió. Al menos
   // una, para que la hoja de un día sin pedidos siga teniendo forma de tabla.
   const celdasPedido = Math.max(1, Math.min(celdasPorFila, planilla.maxLineas));
-  const columnaPesos = PRIMER_PEDIDO + celdasPedido;
+  const ultimoPedido = PRIMER_PEDIDO + celdasPedido - 1;
+  // Con plata, la columna de pesos va después de las del pedido y es la
+  // última. Sin plata, la última es la del último producto.
+  const columnaPesos = ultimoPedido + 1;
+  const ultimaColumna = sinPesos ? ultimoPedido : columnaPesos;
 
   // Los anchos se asignan antes del primer addRow: en ExcelJS, pisar
   // hoja.columns después borra lo que ya se escribió.
@@ -102,7 +123,7 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
     { key: "codigo", width: ANCHO_CODIGO },
     { key: "nombre", width: ANCHO_NOMBRE },
     ...Array.from({ length: celdasPedido }, (_, i) => ({ key: `p${i}`, width: anchoPedido })),
-    { key: "pesos", width: ANCHO_PESOS },
+    ...(sinPesos ? [] : [{ key: "pesos", width: ANCHO_PESOS }]),
   ];
 
   // El título y el resumen van unidos de punta a punta de la tabla. Sueltos
@@ -111,7 +132,7 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   const titulo = hoja.getCell(1, COL_HECHO);
   titulo.value = `Pedidos del ${etiquetaRango(planilla.desde, planilla.hasta)}`;
   titulo.font = { bold: true, size: 14 };
-  hoja.mergeCells(1, COL_HECHO, 1, columnaPesos);
+  hoja.mergeCells(1, COL_HECHO, 1, ultimaColumna);
 
   const porUnidad = planilla.unidades
     .map((unidad) => `${formatearCantidad(planilla.totales[unidad.clave] ?? 0)} ${unidad.corta}`)
@@ -128,7 +149,7 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
       : `${planilla.cuantosPidieron} de ${planilla.filas.length} comercios pidieron`) +
     (porUnidad ? ` · ${porUnidad}` : "");
   resumen.font = { size: 10, color: { argb: APAGADO } };
-  hoja.mergeCells(2, COL_HECHO, 2, columnaPesos);
+  hoja.mergeCells(2, COL_HECHO, 2, ultimaColumna);
 
   const filaEncabezados = hoja.getRow(FILA_ENCABEZADOS);
   filaEncabezados.values = [
@@ -140,16 +161,16 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
     // Con el filtro puesto la columna ya no es lo que compró el comercio sino
     // lo que queda por armarle: el encabezado tiene que decirlo, que el
     // número solo no se distingue.
-    planilla.soloFaltaArmar ? "Pendiente $" : "Total $",
+    ...(sinPesos ? [] : [planilla.soloFaltaArmar ? "Pendiente $" : "Total $"]),
   ];
   filaEncabezados.font = { bold: true };
   filaEncabezados.height = 20;
   // "Pedido" va de punta a punta de las celdas del pedido: cada una lleva un
   // producto distinto, así que ponerles número o nombre no querría decir nada.
   if (celdasPedido > 1) {
-    hoja.mergeCells(FILA_ENCABEZADOS, PRIMER_PEDIDO, FILA_ENCABEZADOS, columnaPesos - 1);
+    hoja.mergeCells(FILA_ENCABEZADOS, PRIMER_PEDIDO, FILA_ENCABEZADOS, ultimoPedido);
   }
-  for (let columna = COL_HECHO; columna <= columnaPesos; columna++) {
+  for (let columna = COL_HECHO; columna <= ultimaColumna; columna++) {
     const celda = filaEncabezados.getCell(columna);
     celda.alignment = { vertical: "middle", horizontal: "left" };
     celda.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GRIS } };
@@ -172,19 +193,19 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
         ...Array.from({ length: celdasPedido }, (_, i) => fila.lineas[desde + i]?.texto ?? null),
         // El total del comercio va en su primer renglón, y vacío si no pidió:
         // un cero se lee como "compró por cero pesos".
-        primero && fila.pidio ? fila.totalPesos : null,
+        ...(sinPesos ? [] : [primero && fila.pidio ? fila.totalPesos : null]),
       ]);
-      agregada.getCell(columnaPesos).numFmt = FORMATO_PESOS;
+      if (!sinPesos) agregada.getCell(columnaPesos).numFmt = FORMATO_PESOS;
       // El nombre se pliega en dos renglones si hace falta: "Almacén de Ramos
       // Generales y Fiambrería del Puerto Viejo" no entra de una y, sin
       // plegarlo, la celda del pedido de al lado se lo comía a la mitad.
       agregada.getCell(COL_NOMBRE).alignment = { wrapText: true, vertical: "top" };
-      for (let columna = PRIMER_PEDIDO; columna < columnaPesos; columna++) {
+      for (let columna = PRIMER_PEDIDO; columna <= ultimoPedido; columna++) {
         // shrinkToFit: si el dueño le puso una abreviatura larga, el texto se
         // achica un poco en vez de salir cortado por la celda de al lado.
         agregada.getCell(columna).alignment = { vertical: "top", shrinkToFit: true };
       }
-      agregada.getCell(columnaPesos).alignment = { vertical: "top" };
+      if (!sinPesos) agregada.getCell(columnaPesos).alignment = { vertical: "top" };
       if (primero && fila.pidio) {
         // Una sola casilla por comercio, en su primer renglón: al que le
         // sigue el pedido abajo se le tacha una vez, cuando está armado
@@ -211,7 +232,7 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   // sobre el número de al lado y en la hoja impresa quedan encimados.
   // Pegadas al nombre y no al final de la hoja: con veinte columnas de pedido,
   // leer un renglón del resumen era cruzar la hoja entera con el dedo.
-  const colCantidad = Math.min(columnaPesos - 1, PRIMER_PEDIDO + 2);
+  const colCantidad = Math.min(ultimoPedido, PRIMER_PEDIDO + 2);
   const colUnidad = colCantidad + 1;
   const unirNombre = (fila: ExcelJS.Row) => {
     if (colCantidad > COL_CODIGO) {
@@ -273,7 +294,7 @@ export async function excelPlanilla(planilla: Planilla): Promise<ArrayBuffer> {
   // de alto como haga falta. Los encabezados se repiten arriba de cada página,
   // que si no la segunda hoja son pedidos sueltos sin saber de quién.
   hoja.pageSetup = {
-    printArea: `A1:${hoja.getColumn(columnaPesos).letter}${ultimaFila}`,
+    printArea: `A1:${hoja.getColumn(ultimaColumna).letter}${ultimaFila}`,
     paperSize: 9,
     orientation: "landscape",
     fitToPage: true,

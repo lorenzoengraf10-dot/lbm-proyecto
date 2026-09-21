@@ -233,6 +233,19 @@ El teléfono resultó no servir: de los cincuenta y tres comercios cargados solo
 
 La columna `telefono` **no se borró** de la base: los que estaban cargados son datos reales que alguien tomó y borrarlos no se puede deshacer. Simplemente salió de las pantallas, y editar una ficha no la pisa. Si algún día vuelve a hacer falta, el dato sigue ahí.
 
+## El repartidor no ve lo que factura el negocio
+
+Decisión de los dueños. La regla, que vale para las dos apps:
+
+- **Lo que necesita con un comercio adelante, se queda**: el precio de cada producto (lo necesita para cotizar), el total del pedido que está cargando (para decírselo al comercio), el total de cada pedido suyo en *Mis pedidos* (para cobrar) y lo que ese comercio quedó debiendo.
+- **Los agregados del negocio, no**: ni lo que lleva vendido en plata, ni su comisión acumulada, ni la columna de montos de todos los comercios juntos.
+
+En concreto: en **Resumen** ve cuántos pedidos entregó, a cuántos comercios distintos, cuántas visitas hizo, qué productos movió y cuántos kilos — y su comisión como **porcentaje** (3%), nunca en pesos. Los rankings ordenan por cantidad y no por importe: ordenar por plata sería mostrar lo mismo con otro nombre, porque el primero de la lista sería el que más factura.
+
+La **planilla** que baja sale sin la columna de plata, en pantalla y en el Excel. Sigue trayendo los mismos comercios con los mismos productos y las mismas cantidades que la del dueño —es lo que usa para cargar el camión— y de paso, como sobra el ancho de esa columna, entra un producto más por renglón. La del panel no se toca: esa lleva los montos.
+
+Hay una prueba (`prueba-sin-plata`) que lo deja clavado: recorre las pantallas del repartidor y su Excel buscando cualquier monto, y a la vez verifica que la hoja del dueño **sí** los tenga. Sacarle la plata a quien la necesita sería el otro error.
+
 ## Lo que el comercio debe, en la puerta
 
 Al abrir el pedido de un comercio, arriba de todo y en rojo, aparece lo que quedó debiendo: los pedidos entregados a cuenta corriente que todavía nadie marcó cobrados, con cuántos son y de hace cuánto viene el más viejo. Va arriba porque es una decisión que el repartidor toma **antes** de cargar nada —si le sigue fiando o le cobra primero— y abajo la vería cuando ya no le sirve.

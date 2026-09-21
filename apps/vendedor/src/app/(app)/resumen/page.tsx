@@ -1,6 +1,6 @@
 import { estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
-import { comienzoDelDiaIso, finDelDiaIso, formatearCantidad, formatearComision, formatearPrecio, mesActual, mesDesdeValor, ultimosMeses } from "@lbm/shared";
+import { comienzoDelDiaIso, finDelDiaIso, formatearCantidad, formatearComision, mesActual, mesDesdeValor, ultimosMeses } from "@lbm/shared";
 
 interface FilaRanking {
   id: string;
@@ -46,7 +46,9 @@ export default async function PaginaResumen({
         // una segunda vuelta, y eso obligaba al celular del repartidor a
         // esperar dos viajes al servidor en vez de uno. comision_pct es el
         // porcentaje congelado de ESTE pedido, no el que tiene hoy el vendedor.
-        .select("id, comercio_id, total, estado, comision_pct, pedido_items(producto_id, cantidad, subtotal)")
+        // Sin total ni subtotal a propósito: esta pantalla no muestra plata,
+        // así que tampoco hace falta traerla al celular.
+        .select("id, comercio_id, estado, pedido_items(producto_id, cantidad)")
         .eq("vendedor_id", userId)
         // En hora argentina: contra el día pelado se perdían los pedidos
         // cargados después de las 21 del último día del mes, y eso es plata
@@ -63,58 +65,54 @@ export default async function PaginaResumen({
       supabase.from("productos").select("id, nombre, unidad_medida"),
     ]);
 
-  const items = (pedidos ?? []).flatMap((pedido) => pedido.pedido_items ?? []);
-
   // La comisión se gana con el pedido entregado, no con el pedido tomado.
   const entregados = (pedidos ?? []).filter((p) => p.estado === "completado");
   const sinEntregar = (pedidos ?? []).length - entregados.length;
 
-  // Todas las columnas numeric llegan como string: sumarlas con + sin
-  // convertir concatenaría texto en vez de sumar (ver docs/PLAN.md sección 10).
-  const totalVendido = entregados.reduce((acc, p) => acc + Number(p.total), 0);
-  // Cada pedido con su propio porcentaje: si le cambiaron la comisión a mitad
-  // de mes, lo de antes se paga como correspondía.
-  const comisionGanada = entregados.reduce(
-    (acc, p) => acc + (Number(p.total) * Number(p.comision_pct)) / 100,
-    0
-  );
+  // De los entregados y no de todos: la tarjeta de arriba dice que cuenta los
+  // entregados, y los dos rankings tienen que contar lo mismo. Contando todos,
+  // con cero entregados la lista de comercios salía vacía y la de productos
+  // llena de kilos, que es una pantalla que se contradice sola.
+  const items = entregados.flatMap((pedido) => pedido.pedido_items ?? []);
+
+  // El porcentaje que le queda, y nada más: acá no se muestra un solo peso.
+  // Los dueños no quieren que el repartidor vea lo que factura el negocio, y
+  // "cuánto vendí en plata" es exactamente eso. Lo que sí es suyo y le sirve
+  // es qué movió: a cuántos comercios le vendió y cuántos kilos salieron.
   const comisionPct = Number(perfil?.comision_pct ?? 0);
 
-  const porComercio = new Map<string, { pedidos: number; total: number }>();
+  // Los rankings van por cantidad, no por importe. Ordenar por plata sería
+  // mostrar la misma información con otro nombre: el de arriba de la lista
+  // sería el que más factura.
+  const porComercio = new Map<string, number>();
   for (const pedido of entregados) {
-    const actual = porComercio.get(pedido.comercio_id) ?? { pedidos: 0, total: 0 };
-    actual.pedidos += 1;
-    actual.total += Number(pedido.total);
-    porComercio.set(pedido.comercio_id, actual);
+    porComercio.set(pedido.comercio_id, (porComercio.get(pedido.comercio_id) ?? 0) + 1);
   }
   const topComercios: FilaRanking[] = [...porComercio.entries()]
-    .map(([id, resumen]) => {
+    .map(([id, pedidos]) => {
       const comercio = (comercios ?? []).find((c) => c.id === id);
       return {
         id,
         nombre: comercio ? `${comercio.codigo} · ${comercio.nombre}` : "Comercio dado de baja",
-        detalle: formatearPrecio(resumen.total),
-        valor: resumen.total,
+        detalle: `${pedidos} ${pedidos === 1 ? "pedido" : "pedidos"}`,
+        valor: pedidos,
       };
     })
     .sort((a, b) => b.valor - a.valor)
     .slice(0, 8);
 
-  const porProducto = new Map<string, { cantidad: number; importe: number }>();
+  const porProducto = new Map<string, number>();
   for (const item of items) {
-    const actual = porProducto.get(item.producto_id) ?? { cantidad: 0, importe: 0 };
-    actual.cantidad += Number(item.cantidad);
-    actual.importe += Number(item.subtotal);
-    porProducto.set(item.producto_id, actual);
+    porProducto.set(item.producto_id, (porProducto.get(item.producto_id) ?? 0) + Number(item.cantidad));
   }
   const topProductos: FilaRanking[] = [...porProducto.entries()]
-    .map(([id, resumen]) => {
+    .map(([id, cantidad]) => {
       const producto = (productos ?? []).find((p) => p.id === id);
       return {
         id,
         nombre: producto?.nombre ?? "Producto dado de baja",
-        detalle: `${formatearCantidad(resumen.cantidad)} ${producto?.unidad_medida ?? ""}`,
-        valor: resumen.importe,
+        detalle: `${formatearCantidad(cantidad)} ${producto?.unidad_medida ?? ""}`,
+        valor: cantidad,
       };
     })
     .sort((a, b) => b.valor - a.valor)
@@ -128,7 +126,7 @@ export default async function PaginaResumen({
       <div>
         <h1 className="text-lg font-semibold text-stone-900">Resumen</h1>
         <p className="text-sm text-stone-500">
-          Cómo te fue en el mes. Cuenta los pedidos entregados.
+          Qué moviste este mes. Cuenta los pedidos entregados.
         </p>
       </div>
 
@@ -150,30 +148,29 @@ export default async function PaginaResumen({
 
       <div className={`${estilos.tarjeta} grid grid-cols-2 gap-4 p-4`}>
         <div>
-          <p className="text-xs text-stone-500">Vendido</p>
-          <p className="text-lg font-semibold text-stone-900">{formatearPrecio(totalVendido)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-stone-500">Tu comisión ({formatearComision(comisionPct)})</p>
-          <p className="text-lg font-semibold text-stone-900">{formatearPrecio(comisionGanada)}</p>
-        </div>
-        <div>
           <p className="text-xs text-stone-500">Pedidos entregados</p>
           <p className="text-lg font-semibold text-stone-900">{entregados.length}</p>
           {sinEntregar > 0 ? (
-            <p className="text-xs text-stone-500">
-              {sinEntregar} sin entregar todavía
-            </p>
+            <p className="text-xs text-stone-500">{sinEntregar} sin entregar todavía</p>
           ) : null}
+        </div>
+        <div>
+          <p className="text-xs text-stone-500">Comercios distintos</p>
+          <p className="text-lg font-semibold text-stone-900">{topComercios.length}</p>
         </div>
         <div>
           <p className="text-xs text-stone-500">Visitas</p>
           <p className="text-lg font-semibold text-stone-900">{visitas ?? 0}</p>
         </div>
+        <div>
+          <p className="text-xs text-stone-500">Tu comisión</p>
+          <p className="text-lg font-semibold text-stone-900">{formatearComision(comisionPct)}</p>
+          <p className="text-xs text-stone-500">sobre lo que entregás</p>
+        </div>
       </div>
 
       <div className={`${estilos.tarjeta} space-y-3 p-4`}>
-        <p className="text-sm font-medium text-stone-900">Quién más te compra</p>
+        <p className="text-sm font-medium text-stone-900">A quién le vendiste más seguido</p>
         {topComercios.length === 0 ? (
           <p className="text-sm text-stone-500">Todavía no hay pedidos este mes.</p>
         ) : (

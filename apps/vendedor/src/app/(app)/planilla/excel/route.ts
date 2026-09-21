@@ -20,7 +20,11 @@ export async function GET(request: Request) {
   // El guard va acá adentro: verifica quién llama antes de tocar el cliente
   // de servicio (ver planilla-repartidor.ts).
   const planilla = await planillaDelRepartidor(rango, opciones);
-  const excel = await excelPlanilla(planilla);
+  // sinPesos: esta es la hoja que baja el repartidor. Con los montos sería la
+  // facturación del día de todo el negocio, que es justo lo que los dueños no
+  // quieren que vea. Sin ellos sigue sirviendo para lo que la usa: qué hay que
+  // cortar y para quién.
+  const excel = await excelPlanilla(planilla, { sinPesos: true });
 
   return new Response(excel as BodyInit, {
     headers: {

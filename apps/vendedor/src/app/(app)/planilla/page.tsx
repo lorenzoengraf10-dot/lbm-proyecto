@@ -4,7 +4,6 @@ import {
   diaArgentina,
   etiquetaRango,
   formatearCantidad,
-  formatearPrecio,
   leerParametrosPlanilla,
   sumarDias,
   type ParametrosPlanilla,
@@ -120,7 +119,6 @@ export default async function PaginaPlanilla({
             ? `${cuantos} ${cuantos === 1 ? "comercio" : "comercios"} con algo por armar`
             : `${cuantos} ${cuantos === 1 ? "comercio pidió" : "comercios pidieron"}`}
           {porUnidad ? ` · ${porUnidad}` : ""}
-          {planilla.totalPesos > 0 ? ` · ${formatearPrecio(planilla.totalPesos)}` : ""}
         </p>
       </div>
 
@@ -160,16 +158,13 @@ export default async function PaginaPlanilla({
         <div className={`${estilos.tarjeta} divide-y divide-stone-100`}>
           {planilla.filas.map((fila) => (
             <div key={fila.id} className="space-y-1 px-4 py-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 text-sm font-medium text-stone-900">
-                  {fila.codigo} · {fila.nombre}
-                </span>
-                {fila.pidio ? (
-                  <span className="shrink-0 text-sm text-stone-500">
-                    {formatearPrecio(fila.totalPesos)}
-                  </span>
-                ) : null}
-              </div>
+              {/* Sin el monto: esta pantalla es la del repartidor, y la
+                  columna de plata de todos los comercios juntos es la
+                  facturación del día del negocio. Lo que necesita de acá es
+                  qué cortar y para quién. */}
+              <p className="text-sm font-medium text-stone-900">
+                {fila.codigo} · {fila.nombre}
+              </p>
               {fila.lineas.length > 0 ? (
                 <p className="text-sm text-stone-700">
                   {fila.lineas.map((linea) => linea.texto).join("  ·  ")}
