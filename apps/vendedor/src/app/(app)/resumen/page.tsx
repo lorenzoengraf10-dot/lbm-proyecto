@@ -1,6 +1,6 @@
 import { estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
-import { formatearCantidad, formatearComision, formatearPrecio, mesActual, mesDesdeValor, ultimosMeses } from "@lbm/shared";
+import { comienzoDelDiaIso, finDelDiaIso, formatearCantidad, formatearComision, formatearPrecio, mesActual, mesDesdeValor, ultimosMeses } from "@lbm/shared";
 
 interface FilaRanking {
   id: string;
@@ -48,14 +48,17 @@ export default async function PaginaResumen({
         // porcentaje congelado de ESTE pedido, no el que tiene hoy el vendedor.
         .select("id, comercio_id, total, estado, comision_pct, pedido_items(producto_id, cantidad, subtotal)")
         .eq("vendedor_id", userId)
-        .gte("fecha", mes.desde)
-        .lte("fecha", `${mes.hasta}T23:59:59`),
+        // En hora argentina: contra el día pelado se perdían los pedidos
+        // cargados después de las 21 del último día del mes, y eso es plata
+        // que el repartidor no veía en su comisión.
+        .gte("fecha", comienzoDelDiaIso(mes.desde))
+        .lt("fecha", finDelDiaIso(mes.hasta)),
       supabase
         .from("visitas")
         .select("id", { count: "exact", head: true })
         .eq("vendedor_id", userId)
-        .gte("fecha_hora", mes.desde)
-        .lte("fecha_hora", `${mes.hasta}T23:59:59`),
+        .gte("fecha_hora", comienzoDelDiaIso(mes.desde))
+        .lt("fecha_hora", finDelDiaIso(mes.hasta)),
       supabase.from("comercios").select("id, codigo, nombre"),
       supabase.from("productos").select("id, nombre, unidad_medida"),
     ]);

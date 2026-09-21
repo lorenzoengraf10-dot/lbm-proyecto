@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ESTADOS, ETIQUETA_ESTADO, esEstado, formatearFechaHora, formatearPrecio, mesDesdeValor, ultimosMeses } from "@lbm/shared";
+import { ESTADOS, ETIQUETA_ESTADO, comienzoDelDiaIso, esEstado, finDelDiaIso, formatearFechaHora, formatearPrecio, mesDesdeValor, ultimosMeses } from "@lbm/shared";
 import { PastillaEstado, PastillaImpago, TextoCobro } from "@/components/estado-pedido";
 import { Tabla } from "@/components/tabla";
 import { EstadoVacio, estilos } from "@/components/ui";
@@ -51,8 +51,11 @@ export async function VistaLista({
   if (estado) consulta = consulta.eq("estado", estado);
   // Lo entregado que quedó a cuenta y todavía no se cobró.
   if (soloImpagos) consulta = consulta.eq("forma_pago", "cuenta_corriente").is("cobrado_en", null);
-  if (desde) consulta = consulta.gte("fecha", desde);
-  if (hasta) consulta = consulta.lte("fecha", `${hasta}T23:59:59`);
+  // Los dos extremos en hora argentina. Contra el día pelado, Postgres los lee
+  // en UTC y el tramo queda corrido tres horas: el "hasta" cortaba a las 21:00
+  // y se comía los pedidos de la nochecita.
+  if (desde) consulta = consulta.gte("fecha", comienzoDelDiaIso(desde));
+  if (hasta) consulta = consulta.lt("fecha", finDelDiaIso(hasta));
 
   const { data: pedidos, error } = await consulta;
 

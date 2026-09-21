@@ -71,10 +71,12 @@ export default async function PaginaInicio() {
     armarReporteSemanal(supabase, semana),
   ]);
 
-  // Facturado = lo entregado. Un pedido que todavía está en el mostrador no
-  // es facturación todavía; los que faltan se muestran aparte, como tarea.
+  // Dos números distintos y con nombre propio: TOMADO es todo lo que se cargó
+  // y ENTREGADO es lo que salió del local. Es el mismo par de palabras que usa
+  // Números, para que las dos pantallas se puedan comparar sin traducir.
   const entregadosHoy = (pedidosHoy ?? []).filter((pedido) => pedido.estado === "completado");
-  const facturadoHoy = entregadosHoy.reduce((total, pedido) => total + Number(pedido.total), 0);
+  const entregadoHoy = entregadosHoy.reduce((total, pedido) => total + Number(pedido.total), 0);
+  const tomadoHoy = (pedidosHoy ?? []).reduce((total, pedido) => total + Number(pedido.total), 0);
 
   const porPreparar = (enCurso ?? []).filter((pedido) => pedido.estado === "pedido").length;
   const porEntregar = (enCurso ?? []).filter((pedido) => pedido.estado === "preparado").length;
@@ -140,14 +142,18 @@ export default async function PaginaInicio() {
       <div className={`${estilos.tarjeta} space-y-4 p-5`}>
         <p className="text-sm font-semibold text-stone-900">Hoy</p>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Numero titulo="Pedidos" valor={(pedidosHoy ?? []).length} />
           <Numero
-            titulo="Facturado"
-            valor={formatearPrecio(facturadoHoy)}
+            titulo="Tomado"
+            valor={formatearPrecio(tomadoHoy)}
+            detalle={`${(pedidosHoy ?? []).length} ${(pedidosHoy ?? []).length === 1 ? "pedido" : "pedidos"}`}
+          />
+          <Numero
+            titulo="Entregado"
+            valor={formatearPrecio(entregadoHoy)}
             detalle={
               entregadosHoy.length < (pedidosHoy ?? []).length
-                ? `${entregadosHoy.length} de ${(pedidosHoy ?? []).length} entregados`
-                : undefined
+                ? `${entregadosHoy.length} de ${(pedidosHoy ?? []).length} salieron`
+                : "salió todo"
             }
           />
           <Numero titulo="Visitas" valor={(visitasHoy ?? []).length} />
@@ -171,8 +177,15 @@ export default async function PaginaInicio() {
           </Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Numero titulo="Facturado" valor={formatearPrecio(reporte.totalFacturado)} />
-          <Numero titulo="Pedidos" valor={reporte.cantidadPedidos} />
+          {/* El reporte semanal cuenta solo lo entregado, así que la etiqueta
+              tiene que decirlo: al lado está "Tomado" del día, y con el mismo
+              nombre los dos números parecían no cerrar. */}
+          <Numero
+            titulo="Entregado"
+            valor={formatearPrecio(reporte.totalFacturado)}
+            detalle={`${reporte.cantidadPedidos} ${reporte.cantidadPedidos === 1 ? "pedido" : "pedidos"}`}
+          />
+          <Numero titulo="Visitas" valor={reporte.cobertura.visitas} />
           <Numero
             titulo="Comisiones"
             valor={formatearPrecio(reporte.totalComisiones)}

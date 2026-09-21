@@ -1,4 +1,4 @@
-import { ITEMS_ANIDADOS, itemsDe } from "@lbm/shared";
+import { ITEMS_ANIDADOS, comienzoDelDiaIso, finDelDiaIso, itemsDe } from "@lbm/shared";
 import type { SesionAdmin } from "./auth";
 
 export interface FilaRanking {
@@ -23,8 +23,23 @@ export interface FilaVendedor {
 }
 
 export interface Numeros {
-  totalFacturado: number;
+  /**
+   * Los dos totales del período, y son distintos a propósito.
+   *
+   * TOMADO es todo lo que se cargó: la demanda, lo que los comercios pidieron.
+   * ENTREGADO es lo que salió del local: la plata que de verdad entró. Un
+   * pedido tomado hoy y que todavía está en el mostrador cuenta en el primero
+   * y no en el segundo.
+   *
+   * Antes la app llamaba "facturado" a los dos según la pantalla —la portada
+   * usaba entregado y esta usaba tomado— así que el mismo período daba dos
+   * números y no había forma de saber cuál creer.
+   */
+  totalTomado: number;
   cantidadPedidos: number;
+  totalEntregado: number;
+  cantidadEntregados: number;
+  /** Promedio por pedido tomado. */
   ticketPromedio: number;
   /** Lo que hay que pagarles a los repartidores por lo entregado en el período. */
   totalComisiones: number;
@@ -63,8 +78,10 @@ export async function armarNumeros(
   let consultaPedidos = supabase
     .from("pedidos")
     .select(`comercio_id, vendedor_id, total, comision_pct, estado, ${ITEMS_ANIDADOS}`);
-  if (desde) consultaPedidos = consultaPedidos.gte("fecha", desde);
-  if (hasta) consultaPedidos = consultaPedidos.lte("fecha", `${hasta}T23:59:59`);
+  // En hora argentina: contra el día pelado el tramo queda corrido tres horas
+  // y se pierde lo de la nochecita — que acá es plata y comisión.
+  if (desde) consultaPedidos = consultaPedidos.gte("fecha", comienzoDelDiaIso(desde));
+  if (hasta) consultaPedidos = consultaPedidos.lt("fecha", finDelDiaIso(hasta));
 
   const [{ data: pedidos }, { data: comercios }, { data: productos }, { data: vendedores }] =
     await Promise.all([
@@ -82,7 +99,9 @@ export async function armarNumeros(
 
   // Number() en todas: las columnas numeric llegan como string desde PostgREST
   // y sumarlas con + concatenaría texto en vez de sumar.
-  const totalFacturado = (pedidos ?? []).reduce((acumulado, p) => acumulado + Number(p.total), 0);
+  const totalTomado = (pedidos ?? []).reduce((acumulado, p) => acumulado + Number(p.total), 0);
+  const entregados = (pedidos ?? []).filter((p) => p.estado === "completado");
+  const totalEntregado = entregados.reduce((acumulado, p) => acumulado + Number(p.total), 0);
 
   const porComercio = new Map<string, { pedidos: number; total: number }>();
   const porVendedor = new Map<
@@ -186,9 +205,11 @@ export async function armarNumeros(
   const cantidadPedidos = (pedidos ?? []).length;
 
   return {
-    totalFacturado,
+    totalTomado,
     cantidadPedidos,
-    ticketPromedio: cantidadPedidos > 0 ? totalFacturado / cantidadPedidos : 0,
+    totalEntregado,
+    cantidadEntregados: entregados.length,
+    ticketPromedio: cantidadPedidos > 0 ? totalTomado / cantidadPedidos : 0,
     totalComisiones: filasVendedores.reduce((acumulado, fila) => acumulado + fila.comision, 0),
     vendedores: filasVendedores,
     comercios: rankingComercios,

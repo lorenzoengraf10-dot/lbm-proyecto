@@ -28,6 +28,33 @@ export function diasDesde(iso: string): number {
 export const OFFSET_ARGENTINA = "-03:00";
 
 /**
+ * El instante en que empieza un día argentino, en ISO.
+ *
+ * Existe porque comparar una columna timestamptz contra un día pelado
+ * ("2026-09-15") lo interpreta en UTC, y Argentina está tres horas atrás: el
+ * filtro arranca a las 21:00 del día anterior. Junto con finDelDiaIso, es la
+ * forma correcta de acotar por día cuando no se puede usar RangoDias porque
+ * el tramo no tiene tope (Números mira todo el historial, RangoDias recorta a
+ * 62 días).
+ */
+export function comienzoDelDiaIso(dia: string): string {
+  return new Date(`${dia}T00:00:00${OFFSET_ARGENTINA}`).toISOString();
+}
+
+/**
+ * El instante en que TERMINA un día argentino: la medianoche del día
+ * siguiente, exclusiva. Va con `.lt()`, nunca con `.lte()`.
+ *
+ * Lo que reemplaza es `${dia}T23:59:59`, que se leía como las 23:59:59 UTC —
+ * o sea las 20:59:59 argentinas— y dejaba afuera todo lo cargado entre las 21
+ * y la medianoche. Un pedido de esa franja desaparecía del filtro, de los
+ * totales y de la comisión.
+ */
+export function finDelDiaIso(dia: string): string {
+  return new Date(`${sumarDias(dia, 1)}T00:00:00${OFFSET_ARGENTINA}`).toISOString();
+}
+
+/**
  * Un tramo de días argentinos, con los días humanos y los instantes exactos
  * juntos. Mismo patrón que Semana en semana.ts: se valida una vez en el borde
  * y de ahí en adelante viaja armado, así la pantalla y la descarga no pueden

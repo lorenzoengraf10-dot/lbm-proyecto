@@ -103,7 +103,8 @@ export default async function PaginaNumeros({
       <div>
         <h1 className="text-xl font-semibold text-stone-900">Números</h1>
         <p className="text-sm text-stone-500">
-          Cuánto se vendió, quién compra más, qué sale más y cuánto hay que pagarle al repartidor.
+          Cuánto se pidió y cuánto salió, quién compra más, qué sale más y cuánto hay que pagarle
+          al repartidor.
         </p>
       </div>
 
@@ -162,12 +163,30 @@ export default async function PaginaNumeros({
         <p className="text-xs text-stone-500">Sin período elegido: son los totales de siempre.</p>
       ) : null}
 
+      {/* Tomado y entregado son dos cosas distintas y van juntos a propósito:
+          es la única forma de que el número de acá cierre con el de la
+          portada. Antes los dos se llamaban "facturado" según la pantalla y el
+          mismo período daba cifras distintas. */}
       <div className={`${estilos.tarjeta} grid gap-4 p-5 sm:grid-cols-4`}>
-        <Dato titulo="Facturado" valor={formatearPrecio(numeros.totalFacturado)} />
-        <Dato titulo="Pedidos" valor={String(numeros.cantidadPedidos)} />
-        <Dato titulo="Ticket promedio" valor={formatearPrecio(numeros.ticketPromedio)} />
-        {/* Los dos totales son distintos a propósito y conviene decirlo acá,
-            que es donde se los ve uno al lado del otro. */}
+        <Dato
+          titulo="Tomado"
+          valor={formatearPrecio(numeros.totalTomado)}
+          ayuda={`${numeros.cantidadPedidos} ${numeros.cantidadPedidos === 1 ? "pedido" : "pedidos"} cargados`}
+        />
+        <Dato
+          titulo="Entregado"
+          valor={formatearPrecio(numeros.totalEntregado)}
+          ayuda={
+            numeros.cantidadEntregados < numeros.cantidadPedidos
+              ? `${numeros.cantidadEntregados} de ${numeros.cantidadPedidos} salieron del local`
+              : "salió todo"
+          }
+        />
+        <Dato
+          titulo="Ticket promedio"
+          valor={formatearPrecio(numeros.ticketPromedio)}
+          ayuda="por pedido tomado"
+        />
         <Dato
           titulo="A pagar en comisiones"
           valor={formatearPrecio(numeros.totalComisiones)}
@@ -178,7 +197,7 @@ export default async function PaginaNumeros({
       <div className="space-y-2">
         <h2 className="text-base font-medium text-stone-900">Por repartidor</h2>
         <p className="text-xs text-stone-500">
-          Lo vendido es todo lo que cargó en el período; la comisión se paga solo por lo entregado.
+          Lo tomado es todo lo que cargó en el período; la comisión se paga solo por lo entregado.
           Cada pedido usa el porcentaje que tenía cuando se cargó, así cambiarle la comisión no
           mueve lo ya ganado.
         </p>
@@ -205,7 +224,7 @@ export default async function PaginaNumeros({
             },
             { encabezado: "Pedidos", celda: (fila) => fila.pedidos },
             {
-              encabezado: "Vendido",
+              encabezado: "Tomado",
               celda: (fila) => formatearPrecio(fila.totalVendido),
             },
             {
@@ -216,19 +235,19 @@ export default async function PaginaNumeros({
             { encabezado: "A pagar", celda: (fila) => formatearPrecio(fila.comision) },
           ]}
           pie={[
-            { etiqueta: "Vendido", valor: formatearPrecio(numeros.totalFacturado) },
+            { etiqueta: "Tomado", valor: formatearPrecio(numeros.totalTomado) },
             { etiqueta: "A pagar", valor: formatearPrecio(numeros.totalComisiones) },
           ]}
         />
       </div>
 
       <TarjetaRanking
-        titulo="Comercios que más compraron"
+        titulo="Comercios que más pidieron"
         filas={numeros.comercios}
         vacio="Sin pedidos en el período elegido."
       />
       <TarjetaRanking
-        titulo="Productos más vendidos"
+        titulo="Productos más pedidos"
         filas={numeros.productos}
         vacio="Sin pedidos en el período elegido."
       />
