@@ -1,10 +1,16 @@
 // Tipos del esquema de la base, espejo de supabase/migrations/.
 //
 // Normalmente esto lo genera `supabase gen types typescript`, pero ese comando
-// necesita Docker. Está escrito a mano y verificado contra el esquema real por
-// scripts/verificar-tipos-db.ts, que compara columna por columna contra la base.
-// Cuando haya un proyecto Supabase linkeado, conviene regenerarlo con:
-//   pnpm dlx supabase gen types typescript --linked > packages/shared/src/database.types.ts
+// necesita Docker, así que está escrito a mano. Como no hay nada que compile
+// este archivo contra la base, una columna agregada en una migración y olvidada
+// acá no la caza ni el typecheck ni las pruebas: el tipo simplemente miente.
+// Al tocar una migración, comparar contra el esquema real con
+//
+//   select table_name || ': ' || string_agg(column_name, ',' order by column_name)
+//   from information_schema.columns where table_schema = 'public'
+//   group by table_name order by table_name;
+//
+// (verificado así el 22/09: las 9 relaciones coinciden columna por columna).
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -361,10 +367,6 @@ export type Database = {
       // rol_actual y es_hoy_ar viven en el schema privado desde la migración
       // 20260910000001 (no expuestas por PostgREST) — nunca se llaman por
       // rpc(), solo las usan las RLS y los triggers, así que no van acá.
-      crear_pedido: {
-        Args: { p_visita_id: string; p_items: Json };
-        Returns: string;
-      };
       actualizar_pedido: {
         Args: { p_pedido_id: string; p_items: Json };
         Returns: undefined;

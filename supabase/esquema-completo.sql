@@ -1374,3 +1374,517 @@ alter table public.usuarios add column pin_fijado_en timestamptz;
 
 -- Las cuentas que ya existen no tienen PIN todavía: entran recién cuando el
 -- dueño se los cargue, y hasta entonces la pantalla se los dice.
+
+
+-- ------------------------------------------------------------
+-- 20260914000001_abreviatura_de_producto.sql
+-- ------------------------------------------------------------
+
+-- La abreviatura del producto, elegida por el dueño al cargarlo.
+--
+-- Es lo que se imprime en la planilla del día: "Queso rallado sachet" no entra
+-- en una celda de una hoja A4, y quién mejor que el dueño para decidir cómo se
+-- llama corto en su negocio. Queda opcional: si no se carga, la planilla
+-- acorta el nombre sola (apps/admin/src/lib/abreviar.ts).
+alter table public.productos add column abreviatura text;
+
+-- Sin espacios al borde y sin cadena vacía: "" y null querrían decir lo mismo
+-- (usar el nombre acortado automáticamente) y conviene que haya una sola forma
+-- de escribirlo. Hasta 20 caracteres, que es lo que entra en la planilla.
+alter table public.productos
+  add constraint productos_abreviatura_razonable
+  check (
+    abreviatura is null
+    or (btrim(abreviatura) = abreviatura and char_length(abreviatura) between 1 and 20)
+  );
+
+-- Única, como el nombre: dos productos con la misma abreviatura harían una
+-- planilla donde no se sabe cuál es cuál, que es justo lo que la abreviatura
+-- tiene que evitar.
+create unique index idx_productos_abreviatura_lower
+  on public.productos (lower(abreviatura))
+  where abreviatura is not null;
+
+
+-- ------------------------------------------------------------
+-- 20260915000001_ubicacion_y_zona_del_comercio.sql
+-- ------------------------------------------------------------
+
+-- Dónde queda cada comercio, y en qué zona del pueblo.
+--
+-- El teléfono resultó no servir: de 53 comercios cargados solo 14 lo tenían, y
+-- para el reparto no hace falta llamar sino saber llegar. Lo que sí sirve es la
+-- dirección (para leerla en la planilla impresa) y el punto exacto en el mapa
+-- (para armar el recorrido y ver cómo se reparte la cartera por el pueblo).
+--
+-- La columna telefono NO se borra: los 14 que están cargados son datos reales
+-- que alguien tomó, y borrarlos no se puede deshacer. Simplemente sale de las
+-- pantallas. Si algún día vuelve a hacer falta, el dato sigue ahí.
+
+alter table public.comercios
+  -- Escrita a mano, como salga: "Mitre 340", "Rivadavia y 7 de Marzo",
+  -- "frente a la escuela 12". Muchas despensas de barrio no tienen altura
+  -- clara, así que exigir un formato sería pedirle al dueño que invente uno.
+  add column direccion text,
+  -- La zona la nombra el dueño, no un algoritmo: él sabe qué es "el centro" y
+  -- qué es "la loma" mejor que cualquier agrupamiento automático, y así puede
+  -- cambiarla cuando cambia el recorrido.
+  add column zona text,
+  -- El punto en el mapa. Lo toma el repartidor con el GPS del celular parado
+  -- en la puerta del comercio (ver guardar_ubicacion_comercio más abajo).
+  add column lat numeric(9, 6),
+  add column lng numeric(9, 6),
+  add column ubicacion_tomada_en timestamptz;
+
+-- Los dos o ninguno: media coordenada no se puede dibujar en ningún lado, y
+-- dejarla a medias haría que el mapa tuviera que desconfiar de cada punto.
+alter table public.comercios
+  add constraint comercios_ubicacion_completa
+  check ((lat is null) = (lng is null)),
+  -- Un GPS que devuelve basura, o un dedo en el teclado, no tiene que poder
+  -- mandar un comercio al medio del océano Índico.
+  add constraint comercios_ubicacion_en_el_planeta
+  check (
+    lat is null
+    or (lat between -90 and 90 and lng between -180 and 180)
+  ),
+  -- Sin espacios al borde y sin cadena vacía, igual que la abreviatura del
+  -- producto: "" y null querrían decir lo mismo y conviene una sola forma.
+  add constraint comercios_direccion_razonable
+  check (
+    direccion is null
+    or (btrim(direccion) = direccion and char_length(direccion) between 1 and 120)
+  ),
+  add constraint comercios_zona_razonable
+  check (
+    zona is null
+    or (btrim(zona) = zona and char_length(zona) between 1 and 40)
+  );
+
+-- Para el mapa y para los filtros por zona.
+create index idx_comercios_zona on public.comercios (zona) where zona is not null;
+create index idx_comercios_con_ubicacion on public.comercios (lat, lng) where lat is not null;
+
+-- La localidad venía escrita de cuatro formas distintas ("carmen de patagones",
+-- "Carmen de patagones", "Carmen de Patagones" y un "Carmwn de patagones" con
+-- typo), lo que hacía que agrupar por localidad diera cuatro grupos de un
+-- mismo pueblo. Se unifican; no se toca ninguna otra localidad.
+update public.comercios
+set localidad = 'Carmen de Patagones'
+where localidad <> 'Carmen de Patagones'
+  and lower(localidad) similar to '%carm(e|w)n de patagones%';
+
+/**
+ * El repartidor guarda el punto del comercio donde está parado.
+ *
+ * security definer porque las RLS de comercios solo dejan escribir al admin, y
+ * está bien que sea así: el repartidor no tiene por qué poder cambiarle el
+ * nombre, el código ni darlo de baja. Esta función es la excepción acotada —
+ * toca exactamente tres columnas y ninguna más.
+ *
+ * Los controles que las RLS ya no pueden hacer los hace ella:
+ *   * exige rol vendedor activo,
+ *   * exige que el comercio exista y esté activo,
+ *   * valida que las coordenadas sean coordenadas.
+ *
+ * Pisa la ubicación anterior a propósito: si el comercio se mudó, o si la
+ * primera lectura del GPS salió con poca precisión, el repartidor vuelve a
+ * tocar el botón al pasar y queda la buena. Quién y cuándo no se guardan
+ * aparte porque la marca de tiempo alcanza para saber si está fresca.
+ */
+create or replace function public.guardar_ubicacion_comercio(
+  p_comercio_id uuid,
+  p_lat numeric,
+  p_lng numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if privado.rol_actual() is distinct from 'vendedor' then
+    raise exception 'Solo un vendedor activo puede guardar la ubicación de un comercio';
+  end if;
+
+  if p_lat is null or p_lng is null
+     or p_lat not between -90 and 90
+     or p_lng not between -180 and 180 then
+    raise exception 'Coordenadas inválidas';
+  end if;
+
+  update public.comercios
+  set lat = p_lat,
+      lng = p_lng,
+      ubicacion_tomada_en = now()
+  where id = p_comercio_id and activo;
+
+  if not found then
+    raise exception 'El comercio no existe o está dado de baja';
+  end if;
+end;
+$$;
+
+-- Igual que el resto de las funciones del proyecto: nadie la ejecuta con el
+-- rol anónimo, solo un usuario con sesión.
+revoke execute on function public.guardar_ubicacion_comercio(uuid, numeric, numeric) from public, anon;
+grant execute on function public.guardar_ubicacion_comercio(uuid, numeric, numeric) to authenticated, service_role;
+
+
+-- ------------------------------------------------------------
+-- 20260915000002_pedido_sin_qr.sql
+-- ------------------------------------------------------------
+
+-- El pedido se toma escaneando el QR pegado en el comercio.
+--
+-- Por qué: el QR es la única prueba de que el repartidor estuvo parado en la
+-- puerta. Eligiendo el comercio de una lista, un pedido se puede cargar desde
+-- cualquier lado, y ahí "visitado" deja de querer decir nada.
+--
+-- Pero un candado sin salida cuesta ventas: el día que un cartel se despega,
+-- se borra con el sol o el comercio lo tapa con una heladera, el repartidor
+-- está ahí con el pedido y no puede cargarlo. Así que el camino normal es el
+-- QR, y el de excepción existe pero deja rastro: hay que escribir por qué, y
+-- el pedido queda marcado para que el dueño lo vea.
+--
+-- null = se escaneó el QR, que es lo normal y lo que no hace falta explicar.
+alter table public.pedidos add column sin_qr_motivo text;
+
+alter table public.pedidos
+  add constraint pedidos_sin_qr_motivo_razonable
+  check (
+    sin_qr_motivo is null
+    or (btrim(sin_qr_motivo) = sin_qr_motivo and char_length(sin_qr_motivo) between 3 and 200)
+  );
+
+-- Son la excepción, así que el índice solo cubre esos.
+create index idx_pedidos_sin_qr on public.pedidos (fecha desc) where sin_qr_motivo is not null;
+
+-- sincronizar_pedido pasa a recibir el motivo.
+--
+-- El cuerpo es EL QUE ESTÁ CORRIENDO HOY (migración 20260912000001, verificado
+-- contra la base de producción con pg_get_functiondef), con dos cambios y nada
+-- más:
+--
+-- 1. El motivo.
+--
+-- 2. Vuelve el "on conflict do nothing" SIN objetivo. La migración
+--    20260911000004 lo había arreglado y 20260912000001 lo pisó sin querer al
+--    redefinir la función entera para congelar la comisión. El problema es
+--    este: pedidos tiene DOS restricciones únicas —la clave primaria (id) y
+--    visita_id— así que "on conflict (id)" solo cubre una. Un choque por
+--    visita_id (el mismo pedido subido con otro id, o una fila de la cola
+--    reintentada después de que el pedido ya entró por otro camino) levanta
+--    una excepción de unicidad cruda en la cara del repartidor en vez de no
+--    hacer nada. Sin objetivo, cubre las dos.
+--
+-- Lo demás se conserva tal cual, porque cada cosa arregló algo que costó
+-- encontrar: el chequeo de que la visita sea de este vendedor Y de este
+-- comercio, el corte cuando el pedido ya estaba subido (que es lo que evita
+-- duplicar los ítems al reintentar), y la comisión leída del vendedor al
+-- crear el pedido.
+--
+-- El parámetro va al final y con valor por defecto. PostgREST resuelve la
+-- llamada por los nombres que le mandan, así que la app vieja que todavía no
+-- manda el motivo sigue funcionando contra esta función: se puede aplicar la
+-- migración primero y redeployar después, sin ventana rota.
+create or replace function public.sincronizar_pedido(
+  p_visita_id uuid,
+  p_comercio_id uuid,
+  p_fecha_hora timestamptz,
+  p_pedido_id uuid default null,
+  p_items jsonb default '[]'::jsonb,
+  p_sin_qr_motivo text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_vendedor_id uuid := auth.uid();
+  v_comision_pct numeric;
+  v_pedido_creado uuid;
+  v_item jsonb;
+  v_precio numeric;
+  v_motivo text := nullif(btrim(coalesce(p_sin_qr_motivo, '')), '');
+begin
+  if privado.rol_actual() is distinct from 'vendedor' then
+    raise exception 'Solo un vendedor activo puede sincronizar pedidos';
+  end if;
+
+  if p_fecha_hora > now() + interval '1 hour' then
+    raise exception 'La fecha no puede estar en el futuro';
+  end if;
+
+  if p_fecha_hora < now() - interval '30 days' then
+    raise exception 'La fecha es demasiado vieja para sincronizar';
+  end if;
+
+  if not exists (select 1 from comercios where id = p_comercio_id and activo) then
+    raise exception 'El comercio no existe o está dado de baja';
+  end if;
+
+  -- Un motivo de una letra no es un motivo: si se va a saltear el QR, que
+  -- quede escrito algo que se pueda leer después. Se recorta en vez de
+  -- rechazar cuando se pasa de largo: el pedido importa más que el texto.
+  if v_motivo is not null then
+    if char_length(v_motivo) < 3 then
+      raise exception 'Escribí por qué se carga sin escanear el QR';
+    end if;
+    v_motivo := left(v_motivo, 200);
+  end if;
+
+  insert into visitas (id, comercio_id, vendedor_id, fecha_hora)
+  values (p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora)
+  on conflict do nothing;
+
+  if not exists (
+    select 1 from visitas
+    where id = p_visita_id and vendedor_id = v_vendedor_id and comercio_id = p_comercio_id
+  ) then
+    raise exception 'Esa visita ya existe y no es de este vendedor';
+  end if;
+
+  if p_pedido_id is null or jsonb_array_length(p_items) = 0 then
+    return;
+  end if;
+
+  select comision_pct into v_comision_pct from usuarios where id = v_vendedor_id;
+
+  insert into pedidos (id, visita_id, comercio_id, vendedor_id, fecha, comision_pct, sin_qr_motivo)
+  values (p_pedido_id, p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora, coalesce(v_comision_pct, 0), v_motivo)
+  on conflict do nothing
+  returning id into v_pedido_creado;
+
+  -- Ya estaba sincronizado: cortar acá es lo que evita duplicar los ítems
+  -- cuando el celular reintenta una fila que en realidad ya había entrado.
+  if v_pedido_creado is null then
+    return;
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    select precio into v_precio
+    from productos
+    where id = (v_item->>'producto_id')::uuid and activo;
+
+    if v_precio is null then
+      raise exception 'El producto % no existe o no está activo', v_item->>'producto_id';
+    end if;
+
+    insert into pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
+    values (p_pedido_id, (v_item->>'producto_id')::uuid, (v_item->>'cantidad')::numeric, v_precio);
+  end loop;
+end;
+$$;
+
+-- create or replace repone los privilegios por defecto: hay que volver a
+-- cerrarla después de redefinirla.
+revoke execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb, text) from public, anon;
+grant execute on function public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb, text) to authenticated, service_role;
+
+-- La firma vieja (sin el motivo) queda huérfana: PostgreSQL la trata como otra
+-- función porque cambió la cantidad de parámetros. Se borra para que no quede
+-- una puerta de atrás que se saltea el motivo.
+drop function if exists public.sincronizar_pedido(uuid, uuid, timestamptz, uuid, jsonb);
+
+
+-- ------------------------------------------------------------
+-- 20260922000001_cerrar_escritura_directa.sql
+-- ------------------------------------------------------------
+
+-- Cerrar la escritura directa contra las tablas.
+--
+-- Auditoría del 22/09: la base tenía tres agujeros, y los tres venían del
+-- mismo malentendido. Las RLS son POR FILA, no por columna: una policy de
+-- UPDATE que dice "este pedido es tuyo y es de hoy" deja escribir CUALQUIER
+-- columna de esa fila. Y los permisos de tabla son otra capa distinta de las
+-- policies: Supabase le da de fábrica a anon y authenticated todos los
+-- privilegios sobre el schema public, TRUNCATE incluido, y TRUNCATE no pasa
+-- por las RLS.
+--
+-- Lo que se podía hacer desde la app del repartidor, con su propio token, sin
+-- tocar nada del celular (probado contra una copia de la base):
+--
+--   1. update pedidos set total = 819000, comision_pct = 20 where id = <suyo>
+--      Su comisión de un pedido pasaba de $1.092 a $163.800. La policy lo
+--      dejaba pasar porque el pedido era suyo y del día.
+--
+--   2. insert into pedido_items (..., precio_unitario) values (..., 999999)
+--      El trigger recalcula el total con el precio que vino en el insert, no
+--      con el de la lista: un pedido de $30.000 quedaba en $10.029.999.
+--
+--   3. truncate pedidos, pedido_items, comercios, productos, usuarios...
+--      Desde anon, ni siquiera hacía falta estar logueado.
+--
+-- El arreglo NO afloja ninguna policy: al revés, saca los privilegios de
+-- tabla que la app nunca usó y deja el resto donde ya estaba. La regla que
+-- queda es "todo lo que escribe pedidos pasa por una función con su propio
+-- control de permisos", que es lo que ya hacían sincronizar_pedido,
+-- cambiar_estado_pedido, marcar_cobrado y corregir_pedido_admin.
+
+-- ---------------------------------------------------------------------------
+-- 1. actualizar_pedido pasa a security definer, con el control adentro
+-- ---------------------------------------------------------------------------
+-- Era la única función que seguía siendo security invoker, y por eso era la
+-- única razón por la que el repartidor necesitaba insert y delete sobre
+-- pedido_items. Ese permiso era el agujero nº 2: la función pone el precio de
+-- la lista, pero nada obligaba a pasar POR la función.
+--
+-- Al hacerla definer hay que traer adentro lo que antes chequeaban las
+-- policies (que el pedido sea propio y del día), porque el dueño de la tabla
+-- no pasa por las RLS. Se chequea ANTES del delete, no después: con definer,
+-- un delete sin filtrar por permisos sí borraría los ítems de un pedido ajeno.
+create or replace function public.actualizar_pedido(p_pedido_id uuid, p_items jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_item jsonb;
+  v_precio numeric;
+  v_rol text := privado.rol_actual();
+  v_vendedor_id uuid;
+  v_fecha timestamptz;
+begin
+  if jsonb_array_length(p_items) = 0 then
+    raise exception 'El pedido necesita al menos un ítem';
+  end if;
+
+  select vendedor_id, fecha into v_vendedor_id, v_fecha
+  from pedidos where id = p_pedido_id;
+
+  if v_vendedor_id is null then
+    raise exception 'El pedido no existe';
+  end if;
+
+  -- El admin no entra por acá: para corregir un pedido viejo tiene
+  -- corregir_pedido_admin, que además deja el motivo anotado. Esto repite lo
+  -- que decían las policies que se dan de baja más abajo.
+  if v_rol is distinct from 'vendedor' then
+    raise exception 'Solo el repartidor corrige sus propios pedidos';
+  end if;
+
+  if v_vendedor_id is distinct from auth.uid() then
+    raise exception 'Solo se puede corregir un pedido propio';
+  end if;
+
+  if not privado.es_hoy_ar(v_fecha) then
+    raise exception 'Un pedido de otro día ya no se puede corregir';
+  end if;
+
+  delete from pedido_items where pedido_id = p_pedido_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    -- El precio sale SIEMPRE de la lista, nunca de lo que mandó el cliente.
+    -- Esa es toda la defensa contra el agujero nº 2.
+    select precio into v_precio
+    from productos
+    where id = (v_item->>'producto_id')::uuid and activo;
+
+    if v_precio is null then
+      raise exception 'El producto % no existe o no está activo', v_item->>'producto_id';
+    end if;
+
+    insert into pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
+    values (p_pedido_id, (v_item->>'producto_id')::uuid, (v_item->>'cantidad')::numeric, v_precio);
+  end loop;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 2. crear_pedido se da de baja
+-- ---------------------------------------------------------------------------
+-- Quedó sin uso cuando el pedido pasó a cargarse siempre por sincronizar_pedido
+-- (la app guarda primero en el celular y sube después, haya o no señal). Era
+-- la otra función security invoker, así que sin los permisos de tabla que se
+-- sacan abajo quedaría rota igual. Una función rota que alguien vuelve a
+-- llamar dentro de un año es peor que una que no está.
+drop function if exists public.crear_pedido(uuid, jsonb);
+
+-- ---------------------------------------------------------------------------
+-- 3. Las policies que quedan sin efecto se dan de baja
+-- ---------------------------------------------------------------------------
+-- No es cosmético. Con RLS prendida y SIN policy, la respuesta es "no". Con
+-- la policy puesta pero sin el privilegio de tabla, la respuesta también es
+-- "no"... hasta que alguien devuelve el privilegio (un grant de más en una
+-- migración futura, o el default de Supabase al crear algo) y ahí la policy
+-- vuelve a abrir la puerta sola. Borrarlas hace que reabrir el agujero
+-- necesite dos errores en vez de uno.
+drop policy if exists "pedidos_insert_vendedor" on public.pedidos;
+drop policy if exists "pedidos_update_vendedor_mismo_dia" on public.pedidos;
+drop policy if exists "pedido_items_insert_vendedor" on public.pedido_items;
+drop policy if exists "pedido_items_update_vendedor_mismo_dia" on public.pedido_items;
+drop policy if exists "pedido_items_delete_vendedor_mismo_dia" on public.pedido_items;
+drop policy if exists "visitas_insert_vendedor" on public.visitas;
+drop policy if exists "usuarios_insert_admin" on public.usuarios;
+drop policy if exists "usuarios_delete_admin" on public.usuarios;
+drop policy if exists "configuracion_insert_admin" on public.configuracion;
+drop policy if exists "configuracion_update_admin" on public.configuracion;
+
+-- pedidos_delete_vendedor_mismo_dia SE QUEDA: es la que sostiene "anular el
+-- pedido el mismo día", el único write directo que hace la app del repartidor
+-- (apps/vendedor/src/app/(app)/mis-pedidos/actions.ts). Un delete no puede
+-- falsear una columna, así que el problema de arriba no aplica.
+
+-- ---------------------------------------------------------------------------
+-- 4. Los privilegios de tabla: se sacan todos y se devuelve solo lo que se usa
+-- ---------------------------------------------------------------------------
+-- anon no necesita absolutamente nada: todas las policies exigen un rol, y
+-- sin sesión privado.rol_actual() es null. Lo único que hacía con estos
+-- permisos era TRUNCATE, que se saltea las RLS.
+revoke all on public.usuarios      from anon, authenticated;
+revoke all on public.comercios     from anon, authenticated;
+revoke all on public.productos     from anon, authenticated;
+revoke all on public.configuracion from anon, authenticated;
+revoke all on public.visitas       from anon, authenticated;
+revoke all on public.pedidos       from anon, authenticated;
+revoke all on public.pedido_items  from anon, authenticated;
+revoke all on public.cobertura_comercios from anon, authenticated;
+
+-- Leer: lo filtran las policies de select, que no cambian.
+grant select on public.usuarios            to authenticated;
+grant select on public.comercios           to authenticated;
+grant select on public.productos           to authenticated;
+grant select on public.configuracion       to authenticated;
+grant select on public.visitas             to authenticated;
+grant select on public.pedidos             to authenticated;
+grant select on public.pedido_items        to authenticated;
+grant select on public.cobertura_comercios to authenticated;
+
+-- Escribir: solo el ABM del panel, que ya está cerrado a rol admin por las
+-- policies *_admin, y el "anular pedido" del repartidor.
+grant insert, update, delete on public.comercios to authenticated;
+grant insert, update, delete on public.productos to authenticated;
+grant update                 on public.usuarios  to authenticated;
+grant delete                 on public.pedidos   to authenticated;
+
+-- Lo que NO se devuelve, y por qué:
+--   pedidos      insert/update  → sincronizar_pedido, cambiar_estado_pedido,
+--                                 marcar_cobrado y corregir_pedido_admin son
+--                                 security definer y no lo necesitan.
+--   pedido_items todo           → actualizar_pedido ahora es definer.
+--   visitas      insert         → las crea sincronizar_pedido.
+--   usuarios     insert/delete  → los hace el panel con la clave de servicio,
+--                                 porque también hay que tocar auth.users.
+--   configuracion insert/update → no hay pantalla que lo escriba.
+--   TRUNCATE     en todas       → nunca lo usó nadie, y no mira las RLS.
+
+-- ---------------------------------------------------------------------------
+-- 5. Que una tabla nueva no vuelva a nacer abierta
+-- ---------------------------------------------------------------------------
+-- Este es el origen de todo: el default de Supabase para el schema public es
+-- "arwdDxtm a anon y a authenticated", o sea todo, TRUNCATE incluido. Cada
+-- tabla que se cree hereda eso salvo que se diga lo contrario.
+--
+-- OJO al escribir la próxima migración que cree una tabla: después del
+-- create table hay que agregar a mano el
+--     grant select on public.<tabla> to authenticated;
+-- que haga falta. Si la pantalla dice "permission denied for table", es esto,
+-- y está bien que sea así: se prefiere una pantalla rota y visible a una
+-- tabla abierta y silenciosa.
+alter default privileges in schema public revoke all on tables from anon, authenticated;
+alter default privileges in schema public revoke all on sequences from anon, authenticated;
