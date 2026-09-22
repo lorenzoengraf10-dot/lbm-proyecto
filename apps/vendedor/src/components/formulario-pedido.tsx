@@ -7,6 +7,18 @@ import { Mensaje, estilos } from "./ui";
 
 export type ProductoCatalogo = Pick<Tabla<"productos">, "id" | "nombre" | "precio" | "unidad_medida">;
 
+/**
+ * Arriba de esta cantidad en un mismo producto, la app pregunta antes de
+ * guardar. El caso real es la coma que no entró: escribir 2500 donde iba 2,5
+ * arma un pedido de ocho millones de pesos, y hasta ahora se guardaba sin que
+ * nadie dijera nada — entraba a los números del negocio y a la comisión del
+ * repartidor como facturación de verdad.
+ *
+ * Pregunta, no bloquea: un comercio puede llevar 60 kg de una y ese pedido
+ * tiene que poder cargarse igual, en un toque más.
+ */
+const CANTIDAD_QUE_HACE_DUDAR = 50;
+
 export interface ItemPedido {
   productoId: string;
   cantidad: number;
@@ -75,6 +87,55 @@ export function FormularioPedido({
     const producto = productos.find((p) => p.id === item.productoId);
     return acumulado + (producto ? Number(producto.precio) * item.cantidad : 0);
   }, 0);
+
+  const nombrar = (productoId: string) => productos.find((p) => p.id === productoId);
+
+  const exageradas = items
+    .filter((item) => item.cantidad > CANTIDAD_QUE_HACE_DUDAR)
+    .map((item) => {
+      const producto = nombrar(item.productoId);
+      return `${producto?.nombre ?? ""}: ${item.cantidad} ${producto?.unidad_medida ?? ""}`;
+    });
+
+  // La firma es "qué hay cargado ahora mismo". Sirve para que el aviso se
+  // apague solo al corregir la cantidad, sin un efecto que sincronice estados:
+  // si lo confirmado deja de coincidir con lo escrito, vuelve a preguntar.
+  // Sin esto, confirmar 2500 y después escribir 5000 lo guardaba sin chistar.
+  const firma = items.map((item) => `${item.productoId}:${item.cantidad}`).join("|");
+  const [confirmando, setConfirmando] = useState<string | null>(null);
+  const preguntando = exageradas.length > 0 && confirmando === firma;
+
+  function intentarGuardar() {
+    setError(null);
+
+    // cantidad es numeric(10,2) en la base: 0,004 se redondea a 0 y la base lo
+    // rechaza con el nombre de la restricción en inglés. Se dice acá.
+    const enCero = items.filter((item) => Math.round(item.cantidad * 100) / 100 < 0.01);
+    if (enCero.length > 0) {
+      setError("Hay una cantidad demasiado chica. La más chica que se puede cargar es 0,01.");
+      return;
+    }
+
+    // subtotal también es numeric(10,2): arriba de 99.999.999,99 Postgres corta
+    // con "numeric field overflow" y eso es lo que se leería en el celular.
+    const noEntra = items.find((item) => {
+      const precio = Number(nombrar(item.productoId)?.precio ?? 0);
+      return item.cantidad * precio > 99_999_999.99;
+    });
+    if (noEntra) {
+      setError(
+        `${nombrar(noEntra.productoId)?.nombre ?? "Ese producto"}: esa cantidad es demasiado grande para cargarla. Fijate si se coló un cero de más.`
+      );
+      return;
+    }
+
+    if (exageradas.length > 0 && confirmando !== firma) {
+      setConfirmando(firma);
+      return;
+    }
+
+    guardar();
+  }
 
   function guardar() {
     setError(null);
@@ -155,13 +216,27 @@ export function FormularioPedido({
 
       {error ? <Mensaje tipo="error">{error}</Mensaje> : null}
 
+      {preguntando ? (
+        <Mensaje tipo="aviso">
+          <span className="font-medium">Revisá estas cantidades antes de mandar:</span>
+          <ul className="mt-1 list-disc pl-5">
+            {exageradas.map((linea) => (
+              <li key={linea}>{linea}</li>
+            ))}
+          </ul>
+          <span className="mt-1 block">
+            Si está bien, tocá de nuevo. Si no, corregí el número acá arriba.
+          </span>
+        </Mensaje>
+      ) : null}
+
       <button
         type="button"
         disabled={pendiente || items.length === 0}
-        onClick={guardar}
+        onClick={intentarGuardar}
         className={`w-full ${estilos.boton}`}
       >
-        {pendiente ? "Guardando…" : textoBoton}
+        {pendiente ? "Guardando…" : preguntando ? `Sí, está bien — ${textoBoton}` : textoBoton}
       </button>
 
       {onSinPedido ? (

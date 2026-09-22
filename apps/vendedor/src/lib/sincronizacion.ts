@@ -18,6 +18,32 @@ import {
   type PendienteCola,
 } from "./almacen-local";
 
+/**
+ * Pone en castellano lo que devuelve Postgres cuando corta por una restricción
+ * de la tabla.
+ *
+ * Estos mensajes no son de adorno: son lo que el repartidor lee en el celular,
+ * parado en la puerta del comercio, cuando el pedido no entra. Sin esto leía
+ * "numeric field overflow" o 'new row for relation "pedido_items" violates
+ * check constraint "pedido_items_cantidad_check"', que no le dice qué hacer.
+ *
+ * La app ya frena los dos casos antes de mandar (ver formulario-pedido.tsx),
+ * así que acá llegan solo por el camino largo: el pedido se guardó sin señal
+ * con un precio, y para cuando sube el dueño lo cambió y ahora no entra.
+ */
+function enCastellano(mensaje: string): string {
+  if (/numeric field overflow/i.test(mensaje)) {
+    return "La cantidad es demasiado grande para ese producto. Fijate si se coló un cero de más.";
+  }
+  if (/pedido_items_cantidad_check/i.test(mensaje)) {
+    return "Hay una cantidad en cero. La más chica que se puede cargar es 0,01.";
+  }
+  if (/pedido_items_precio_unitario_check|pedidos_total_check/i.test(mensaje)) {
+    return "El pedido quedó con un precio negativo. Avisale al dueño.";
+  }
+  return mensaje;
+}
+
 /** Qué pasó con lo que el vendedor acaba de cargar. */
 export type ResultadoCarga =
   | { estado: "subido" }
@@ -103,8 +129,8 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
     // Un rechazo del servidor (comercio dado de baja, producto que ya no
     // existe, fecha vencida) no se arregla reintentando: se anota el motivo
     // y se deja en la cola para que el vendedor lo vea y avise.
-    errores.set(pendiente.visitaId, error.message);
-    await encolar({ ...pendiente, error: error.message });
+    errores.set(pendiente.visitaId, enCastellano(error.message));
+    await encolar({ ...pendiente, error: enCastellano(error.message) });
   }
 
   // Los estados van DESPUÉS de los pedidos, a propósito: si el vendedor cargó
@@ -126,8 +152,8 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
       continue;
     }
 
-    errores.set(cambio.pedidoId, error.message);
-    await encolarEstado({ ...cambio, error: error.message });
+    errores.set(cambio.pedidoId, enCastellano(error.message));
+    await encolarEstado({ ...cambio, error: enCastellano(error.message) });
   }
 
   const pendientes = (await leerCola()).length + (await leerColaEstados()).length;

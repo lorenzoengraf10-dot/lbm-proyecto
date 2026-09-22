@@ -29,19 +29,36 @@ export function Campo({
   );
 }
 
-export function Mensaje({ tipo, children }: { tipo: "error" | "ok"; children: ReactNode }) {
+/**
+ * "aviso" no es un error: es "pará, mirá esto antes de seguir". Va en ámbar
+ * porque el rojo en la pantalla del pedido se lee como "algo salió mal", y
+ * cargar 60 kg de una no tiene nada de malo — solo hay que confirmarlo.
+ *
+ * Es un div y no un p: adentro puede ir una lista, y una <ul> dentro de un <p>
+ * es HTML inválido (el navegador cierra el párrafo solo y el borde del recuadro
+ * queda partido a la mitad).
+ */
+export function Mensaje({
+  tipo,
+  children,
+}: {
+  tipo: "error" | "ok" | "aviso";
+  children: ReactNode;
+}) {
   const clases =
     tipo === "error"
       ? "border-red-200 bg-red-50 text-red-800"
-      : "border-emerald-200 bg-emerald-50 text-emerald-800";
+      : tipo === "aviso"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : "border-emerald-200 bg-emerald-50 text-emerald-800";
 
   return (
-    <p
+    <div
       role={tipo === "error" ? "alert" : "status"}
       className={`rounded-md border px-3 py-2 text-sm ${clases}`}
     >
       {children}
-    </p>
+    </div>
   );
 }
 
