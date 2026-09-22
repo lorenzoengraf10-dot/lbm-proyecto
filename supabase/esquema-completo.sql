@@ -1888,3 +1888,216 @@ grant delete                 on public.pedidos   to authenticated;
 -- tabla abierta y silenciosa.
 alter default privileges in schema public revoke all on tables from anon, authenticated;
 alter default privileges in schema public revoke all on sequences from anon, authenticated;
+
+
+-- ------------------------------------------------------------
+-- 20260922000002_sincronizar_sin_perder_pedidos.sql
+-- ------------------------------------------------------------
+
+-- Que sincronizar_pedido no diga "listo" cuando no guardó nada.
+--
+-- El insert de pedidos usa "on conflict do nothing" sin decir sobre qué
+-- columna, y después trata "no se insertó" como "ya estaba sincronizado".
+-- Para el reintento de la cola eso es exactamente lo que hace falta: el
+-- celular sube la misma fila dos veces porque se cortó la señal justo al
+-- confirmar, y cortar ahí es lo que evita que los ítems se dupliquen. Eso
+-- anda bien y no se toca.
+--
+-- El problema es que pedidos tiene DOS restricciones únicas: la clave
+-- primaria y visita_id. Si el conflicto es por visita_id —misma visita, otro
+-- pedido— la función también devuelve "listo" sin haber guardado nada, el
+-- celular lo borra de la cola y el pedido desaparece sin que nadie se entere.
+--
+-- Hoy la app no puede llegar a eso: cada pedido nace con su propia visita
+-- (apps/vendedor/src/app/(app)/comercios/page.tsx mintea las dos uuid juntas).
+-- Pero es la clase de trampa que se activa sola el día que alguien agregue
+-- "sumarle algo al pedido de esta visita", y el costo de cerrarla es una
+-- consulta. Probado contra una copia: antes devolvía OK y dejaba 0 pedidos.
+--
+-- Distinguir los dos casos es mirar si el pedido que se quería guardar quedó:
+-- si está, fue un reintento y se sale callado; si no está, la visita ya tenía
+-- otro y hay que avisar. El error no pierde nada: la cola deja la fila
+-- adentro con el motivo a la vista, que es lo que ya hace con cualquier
+-- rechazo del servidor.
+create or replace function public.sincronizar_pedido(
+  p_visita_id uuid,
+  p_comercio_id uuid,
+  p_fecha_hora timestamptz,
+  p_pedido_id uuid default null,
+  p_items jsonb default '[]'::jsonb,
+  p_sin_qr_motivo text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_vendedor_id uuid := auth.uid();
+  v_comision_pct numeric;
+  v_pedido_creado uuid;
+  v_item jsonb;
+  v_precio numeric;
+  v_motivo text := nullif(btrim(coalesce(p_sin_qr_motivo, '')), '');
+begin
+  if privado.rol_actual() is distinct from 'vendedor' then
+    raise exception 'Solo un vendedor activo puede sincronizar pedidos';
+  end if;
+
+  if p_fecha_hora > now() + interval '1 hour' then
+    raise exception 'La fecha no puede estar en el futuro';
+  end if;
+
+  if p_fecha_hora < now() - interval '30 days' then
+    raise exception 'La fecha es demasiado vieja para sincronizar';
+  end if;
+
+  if not exists (select 1 from comercios where id = p_comercio_id and activo) then
+    raise exception 'El comercio no existe o está dado de baja';
+  end if;
+
+  -- Un motivo de una letra no es un motivo: si se va a saltear el QR, que
+  -- quede escrito algo que se pueda leer después. Se recorta en vez de
+  -- rechazar cuando se pasa de largo: el pedido importa más que el texto.
+  if v_motivo is not null then
+    if char_length(v_motivo) < 3 then
+      raise exception 'Escribí por qué se carga sin escanear el QR';
+    end if;
+    v_motivo := left(v_motivo, 200);
+  end if;
+
+  insert into visitas (id, comercio_id, vendedor_id, fecha_hora)
+  values (p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora)
+  on conflict do nothing;
+
+  if not exists (
+    select 1 from visitas
+    where id = p_visita_id and vendedor_id = v_vendedor_id and comercio_id = p_comercio_id
+  ) then
+    raise exception 'Esa visita ya existe y no es de este vendedor';
+  end if;
+
+  if p_pedido_id is null or jsonb_array_length(p_items) = 0 then
+    return;
+  end if;
+
+  select comision_pct into v_comision_pct from usuarios where id = v_vendedor_id;
+
+  insert into pedidos (id, visita_id, comercio_id, vendedor_id, fecha, comision_pct, sin_qr_motivo)
+  values (p_pedido_id, p_visita_id, p_comercio_id, v_vendedor_id, p_fecha_hora, coalesce(v_comision_pct, 0), v_motivo)
+  on conflict do nothing
+  returning id into v_pedido_creado;
+
+  if v_pedido_creado is null then
+    -- No se insertó. Si el pedido está, fue un reintento de la cola: salir
+    -- callado es justamente lo que evita duplicarle los ítems.
+    if exists (select 1 from pedidos where id = p_pedido_id) then
+      return;
+    end if;
+    -- Y si no está, el choque fue por visita_id: esa visita ya tiene otro
+    -- pedido. Antes esto devolvía "listo" y el pedido se perdía.
+    raise exception 'Esa visita ya tiene otro pedido cargado';
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    select precio into v_precio
+    from productos
+    where id = (v_item->>'producto_id')::uuid and activo;
+
+    if v_precio is null then
+      raise exception 'El producto % no existe o no está activo', v_item->>'producto_id';
+    end if;
+
+    insert into pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
+    values (p_pedido_id, (v_item->>'producto_id')::uuid, (v_item->>'cantidad')::numeric, v_precio);
+  end loop;
+end;
+$$;
+
+
+-- ------------------------------------------------------------
+-- 20260922000003_indices_y_rls_mas_livianas.sql
+-- ------------------------------------------------------------
+
+-- Dos cosas que marcó el linter de Supabase en la auditoría del 22/09.
+-- Ninguna se nota hoy, con cinco comercios y unos pocos pedidos por día. Las
+-- dos empiezan a notarse con un par de años de historial encima, que es
+-- exactamente cuando nadie se acuerda de por qué la planilla tarda.
+
+-- ---------------------------------------------------------------------------
+-- 1. Dos claves foráneas sin índice
+-- ---------------------------------------------------------------------------
+-- pedido_items.producto_id es la que importa: el bloque "Para preparar" de la
+-- planilla agrupa por producto, y el reporte semanal arma el ranking igual.
+-- Sin índice, cada uno de esos agrupamientos recorre la tabla entera de ítems.
+--
+-- pedidos.corregido_por casi no se consulta, pero sin índice cada borrado de
+-- un usuario tiene que recorrer pedidos entero para comprobar la foránea.
+create index if not exists idx_pedido_items_producto on public.pedido_items (producto_id);
+create index if not exists idx_pedidos_corregido_por on public.pedidos (corregido_por)
+  where corregido_por is not null;
+
+-- ---------------------------------------------------------------------------
+-- 2. Las policies llamaban a auth.uid() una vez POR FILA
+-- ---------------------------------------------------------------------------
+-- Escrito así, Postgres trata auth.uid() y privado.rol_actual() como algo que
+-- puede cambiar de fila en fila y las vuelve a evaluar en cada una. Envueltas
+-- en (select ...) las calcula una sola vez por consulta y compara contra ese
+-- valor. Es el patrón que recomienda Supabase y no cambia en nada a quién deja
+-- pasar: son las mismas condiciones, con un paréntesis.
+--
+-- Se recrean enteras en vez de "alterarlas" porque Postgres no deja cambiar la
+-- expresión de una policy sin volver a escribirla.
+
+drop policy if exists "usuarios_select" on public.usuarios;
+create policy "usuarios_select" on public.usuarios
+  for select
+  using (
+    (select privado.rol_actual()) = 'admin'
+    or (id = (select auth.uid()) and activo)
+  );
+
+drop policy if exists "visitas_select" on public.visitas;
+create policy "visitas_select" on public.visitas
+  for select
+  using (
+    (select privado.rol_actual()) = 'admin'
+    or ((select privado.rol_actual()) = 'vendedor' and vendedor_id = (select auth.uid()))
+  );
+
+drop policy if exists "pedidos_select" on public.pedidos;
+create policy "pedidos_select" on public.pedidos
+  for select
+  using (
+    (select privado.rol_actual()) = 'admin'
+    or ((select privado.rol_actual()) = 'vendedor' and vendedor_id = (select auth.uid()))
+  );
+
+-- La única que sigue dejando escribir directo: es la que sostiene "anular el
+-- pedido el mismo día" en la app del repartidor.
+drop policy if exists "pedidos_delete_vendedor_mismo_dia" on public.pedidos;
+create policy "pedidos_delete_vendedor_mismo_dia" on public.pedidos
+  for delete
+  using (
+    (select privado.rol_actual()) = 'vendedor'
+    and vendedor_id = (select auth.uid())
+    and privado.es_hoy_ar(fecha)
+  );
+
+drop policy if exists "pedido_items_select" on public.pedido_items;
+create policy "pedido_items_select" on public.pedido_items
+  for select
+  using (
+    exists (
+      select 1 from public.pedidos p
+      where p.id = pedido_items.pedido_id
+        and (
+          (select privado.rol_actual()) = 'admin'
+          or ((select privado.rol_actual()) = 'vendedor' and p.vendedor_id = (select auth.uid()))
+        )
+    )
+  );
+
+-- es_hoy_ar(fecha) se queda sin envolver a propósito: depende de la fila, así
+-- que ahí sí hay que evaluarla una vez por cada una.

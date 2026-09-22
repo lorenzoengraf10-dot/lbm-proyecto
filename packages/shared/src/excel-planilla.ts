@@ -200,6 +200,11 @@ export async function excelPlanilla(
       // Generales y Fiambrería del Puerto Viejo" no entra de una y, sin
       // plegarlo, la celda del pedido de al lado se lo comía a la mitad.
       agregada.getCell(COL_NOMBRE).alignment = { wrapText: true, vertical: "top" };
+      // El código va arriba también. Todas las demás celdas del renglón ya
+      // alineaban arriba menos esta, así que cuando el nombre se plegaba en
+      // cuatro líneas el código quedaba flotando al pie de la fila, lejos del
+      // comercio al que pertenece. Se ve solo al imprimir, con un nombre largo.
+      agregada.getCell(COL_CODIGO).alignment = { vertical: "top" };
       for (let columna = PRIMER_PEDIDO; columna <= ultimoPedido; columna++) {
         // shrinkToFit: si el dueño le puso una abreviatura larga, el texto se
         // achica un poco en vez de salir cortado por la celda de al lado.
