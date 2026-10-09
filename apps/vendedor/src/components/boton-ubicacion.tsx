@@ -69,14 +69,22 @@ export function BotonUbicacion({
           return;
         }
 
-        const { error } = await crearClienteNavegador().rpc("guardar_ubicacion_comercio", {
+        const { error, status } = await crearClienteNavegador().rpc("guardar_ubicacion_comercio", {
           p_comercio_id: comercioId,
           p_lat: Number(latitude.toFixed(6)),
           p_lng: Number(longitude.toFixed(6)),
         });
 
         if (error) {
-          setEstado({ paso: "error", texto: `No se pudo guardar: ${error.message}` });
+          // status 0 es que no hubo conexión: sin esto el repartidor leía
+          // "TypeError: Failed to fetch".
+          setEstado({
+            paso: "error",
+            texto:
+              status === 0 || status >= 500
+                ? "No hubo señal para guardarla. Probá de nuevo en un rato."
+                : `No se pudo guardar: ${error.message}`,
+          });
           return;
         }
         setEstado({ paso: "ok", metros: Math.round(accuracy) });

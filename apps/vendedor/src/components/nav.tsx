@@ -21,6 +21,7 @@ const PESTAÑAS = [
 
 export function EncabezadoSuperior({ nombre }: { nombre: string }) {
   const { hayConexion, cola } = useDatosLocales();
+  const rechazados = cola.filter((pendiente) => pendiente.error).length;
 
   return (
     <header className="sticky top-0 z-10 border-b border-stone-200 bg-white">
@@ -46,13 +47,23 @@ export function EncabezadoSuperior({ nombre }: { nombre: string }) {
             hayConexion ? "bg-amber-50 text-amber-800" : "bg-stone-800 text-stone-100"
           }`}
         >
-          {hayConexion
-            ? `Subiendo ${cola.length} ${cola.length === 1 ? "pedido" : "pedidos"} pendiente${
-                cola.length === 1 ? "" : "s"
-              }…`
-            : `Sin señal — se guarda todo en el celular${
-                cola.length > 0 ? ` (${cola.length} sin subir)` : ""
-              }`}
+          {/* Un pedido rechazado no se sube solo por más señal que haya:
+              decir "Subiendo…" para siempre escondía que hay que hacer algo. */}
+          {hayConexion && rechazados > 0 ? (
+            <Link href="/mis-pedidos" className="underline">
+              {rechazados === 1
+                ? "1 pedido no se pudo subir — tocá para ver por qué"
+                : `${rechazados} pedidos no se pudieron subir — tocá para ver por qué`}
+            </Link>
+          ) : hayConexion ? (
+            `Subiendo ${cola.length} ${cola.length === 1 ? "pedido" : "pedidos"} pendiente${
+              cola.length === 1 ? "" : "s"
+            }…`
+          ) : (
+            `Sin señal — se guarda todo en el celular${
+              cola.length > 0 ? ` (${cola.length} sin subir)` : ""
+            }`
+          )}
         </p>
       ) : null}
     </header>

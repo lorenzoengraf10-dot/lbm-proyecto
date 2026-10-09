@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FormularioPedido } from "@/components/formulario-pedido";
-import { estilos } from "@/components/ui";
+import { Mensaje, estilos } from "@/components/ui";
 import { requerirVendedor } from "@/lib/auth";
 import { esDeHoy, formatearCantidad, formatearFechaHora, formatearPrecio } from "@lbm/shared";
 import { actualizarPedido } from "../actions";
@@ -35,6 +35,14 @@ export default async function PaginaMiPedido({ params }: { params: Promise<{ id:
     cantidadesIniciales[item.producto_id] = String(Number(item.cantidad));
   }
 
+  // Productos del pedido que ya no están en la lista de precios. El formulario
+  // solo muestra los activos, así que estos renglones no aparecen y al guardar
+  // salían del pedido sin que nadie lo notara.
+  const idsActivos = new Set(productosActivos.map((producto) => producto.id));
+  const dadosDeBaja = (items ?? [])
+    .filter((item) => !idsActivos.has(item.producto_id))
+    .map((item) => (productos ?? []).find((p) => p.id === item.producto_id)?.nombre ?? "un producto");
+
   return (
     <>
       <div>
@@ -42,7 +50,7 @@ export default async function PaginaMiPedido({ params }: { params: Promise<{ id:
           ← Mis pedidos
         </Link>
         <h1 className="text-lg font-semibold text-stone-900">
-          {comercio ? comercio.nombre : "Comercio eliminado"}
+          {comercio ? comercio.nombre : "Comercio dado de baja"}
         </h1>
         <p className="text-sm text-stone-500">{formatearFechaHora(pedido.fecha)}</p>
       </div>
@@ -59,6 +67,13 @@ export default async function PaginaMiPedido({ params }: { params: Promise<{ id:
           <p className="text-sm text-stone-600">
             Corregí las cantidades y guardá. Poné 0 (o borrá el número) en lo que no va.
           </p>
+          {dadosDeBaja.length > 0 ? (
+            <Mensaje tipo="aviso">
+              {dadosDeBaja.join(", ")} ya no {dadosDeBaja.length === 1 ? "está" : "están"} en la
+              lista de precios. Si guardás cambios, {dadosDeBaja.length === 1 ? "sale" : "salen"} del
+              pedido.
+            </Mensaje>
+          ) : null}
           <FormularioPedido
             productos={productosActivos}
             cantidadesIniciales={cantidadesIniciales}

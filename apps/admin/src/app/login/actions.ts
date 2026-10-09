@@ -2,8 +2,10 @@
 
 import {
   MAX_INTENTOS_PIN,
+  MENSAJE_SIN_CONEXION,
   derivarPassword,
   emailInterno,
+  esCredencialInvalida,
   validarPin,
 } from "@lbm/shared";
 import { redirect } from "next/navigation";
@@ -36,17 +38,30 @@ export async function iniciarSesion(
     password,
   });
 
+  // Si Auth no contestó, decir "usuario o contraseña incorrectos" manda a
+  // buscar el error en el lugar equivocado.
+  if (error && !esCredencialInvalida(error)) {
+    return { error: MENSAJE_SIN_CONEXION };
+  }
+
   if (error || !data.user) {
     // Mismo mensaje para usuario inexistente y contraseña incorrecta: si se
     // distinguieran, se podría averiguar qué usuarios existen.
     return { error: "Usuario o contraseña incorrectos." };
   }
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error: errorPerfil } = await supabase
     .from("usuarios")
     .select("rol, activo")
     .eq("id", data.user.id)
     .maybeSingle();
+
+  // Sin poder leer el perfil no se sabe si es admin: se sale y se avisa que
+  // fue la conexión, no que la cuenta no tenga acceso.
+  if (errorPerfil) {
+    await supabase.auth.signOut();
+    return { error: MENSAJE_SIN_CONEXION };
+  }
 
   if (!perfil || perfil.rol !== "admin" || !perfil.activo) {
     await supabase.auth.signOut();
@@ -65,12 +80,15 @@ export async function listarAdmins(): Promise<
   { id: string; nombre: string; tienePin: boolean }[]
 > {
   const admin = crearClienteServiceRole();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("usuarios")
     .select("id, nombre, pin_fijado_en")
     .eq("rol", "admin")
     .eq("activo", true)
     .order("nombre");
+  // supabase-js no tira: devuelve el error. Sin este throw, con la base caída
+  // la lista llegaba vacía y el aviso de conexión de la página no aparecía.
+  if (error) throw new Error(error.message);
   return (data ?? []).map(({ id, nombre, pin_fijado_en }) => ({
     id,
     nombre,
@@ -92,11 +110,14 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
 
   const admin = crearClienteServiceRole();
 
-  const { data: usuario } = await admin
+  const { data: usuario, error: errorUsuario } = await admin
     .from("usuarios")
     .select("id, username, rol, activo, pin_fijado_en")
     .eq("id", id)
     .maybeSingle();
+
+  // Que la base no conteste no es "PIN incorrecto".
+  if (errorUsuario) return { error: MENSAJE_SIN_CONEXION };
 
   // Mismo mensaje que un PIN equivocado, para no revelar qué ids existen.
   if (!usuario || usuario.rol !== "admin" || !usuario.activo) {
@@ -107,11 +128,13 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
     return { error: "Todavía no tenés un PIN. Entrá con tu contraseña y cargate uno." };
   }
 
-  const { data: intentos } = await admin
+  const { data: intentos, error: errorIntentos } = await admin
     .from("intentos_pin")
     .select("fallidos, bloqueado_hasta")
     .eq("usuario_id", id)
     .maybeSingle();
+  // Sin poder leer los intentos tampoco se pueden contar.
+  if (errorIntentos) return { error: MENSAJE_SIN_CONEXION };
 
   if (intentos?.bloqueado_hasta && new Date(intentos.bloqueado_hasta) > new Date()) {
     const minutos = Math.max(
@@ -128,6 +151,13 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
     email: emailInterno(usuario.username),
     password: await derivarPassword(pin, id, claveServiceRole()),
   });
+
+  // Solo un rechazo de la credencial cuenta como intento fallido: con la
+  // base en pausa, esto decía "PIN incorrecto" y descontaba intentos por un
+  // PIN que estaba bien.
+  if (error && !esCredencialInvalida(error)) {
+    return { error: MENSAJE_SIN_CONEXION };
+  }
 
   if (error || !data.user) {
     const fallidos = (intentos?.fallidos ?? 0) + 1;

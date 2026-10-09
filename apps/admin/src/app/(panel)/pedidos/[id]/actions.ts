@@ -6,6 +6,7 @@ import {
   ETIQUETA_PAGO,
   esEstado,
   esFormaPago,
+  explicarErrorDeBase,
   type FormaPago,
 } from "@lbm/shared";
 import { requerirAdmin } from "@/lib/auth";
@@ -54,12 +55,11 @@ export async function corregirPedido(
     p_items: items,
     p_motivo: motivo,
   });
-  if (error) return fallo(`No se pudo corregir: ${error.message}`);
+  if (error) return fallo(`No se pudo corregir: ${explicarErrorDeBase(error.message)}`);
 
   revalidatePath(`/pedidos/${pedidoId}`);
   revalidatePath("/pedidos");
-  revalidatePath("/comisiones");
-  revalidatePath("/reportes");
+  revalidatePath("/numeros");
   revalidatePath("/");
   return exito("Pedido corregido: el total y la comisión ya se recalcularon solos.");
 }
@@ -91,7 +91,7 @@ export async function cambiarEstado(
     p_forma_pago: estado === "completado" && esFormaPago(formaPago) ? formaPago : null,
   });
 
-  if (error) return fallo(`No se pudo cambiar el estado: ${error.message}`);
+  if (error) return fallo(`No se pudo cambiar el estado: ${explicarErrorDeBase(error.message)}`);
 
   revalidarPedido(pedidoId);
 
@@ -113,7 +113,7 @@ export async function cobrarPedido(
   if (!pedidoId) return fallo("Falta el pedido.");
 
   const { error } = await supabase.rpc("marcar_cobrado", { p_pedido_id: pedidoId });
-  if (error) return fallo(`No se pudo marcar como cobrado: ${error.message}`);
+  if (error) return fallo(`No se pudo marcar como cobrado: ${explicarErrorDeBase(error.message)}`);
 
   revalidarPedido(pedidoId);
   return exito("Pedido cobrado.");
@@ -123,7 +123,6 @@ export async function cobrarPedido(
 function revalidarPedido(pedidoId: string): void {
   revalidatePath(`/pedidos/${pedidoId}`);
   revalidatePath("/pedidos");
-  revalidatePath("/comisiones");
-  revalidatePath("/reportes");
+  revalidatePath("/numeros");
   revalidatePath("/");
 }

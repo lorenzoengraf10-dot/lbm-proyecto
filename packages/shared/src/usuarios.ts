@@ -24,3 +24,26 @@ export function validarUsername(username: string): string | null {
 export function emailInterno(username: string): string {
   return `${normalizarUsername(username)}@${DOMINIO_EMAIL_INTERNO}`;
 }
+
+/**
+ * Lo que se le dice a quien intenta entrar cuando el problema no es su
+ * credencial sino que el servidor no contestó.
+ */
+export const MENSAJE_SIN_CONEXION =
+  "No se pudo conectar con el servidor. Probá de nuevo en un rato; si sigue, avisale al dueño.";
+
+/**
+ * ¿Supabase Auth rechazó la credencial, o directamente no se pudo hablar con
+ * él?
+ *
+ * Importa porque se confundían. Con la base en pausa (le pasó al proyecto en
+ * octubre: el plan gratuito la duerme tras una semana sin uso), el login decía
+ * "PIN incorrecto", contaba el intento como fallido y acercaba al usuario al
+ * bloqueo — por un PIN que estaba bien. Solo un 400 es "eso no es": usuario o
+ * contraseña equivocados, o cuenta sin confirmar. Un 5xx, un 429, o una
+ * conexión que ni llegó (status 0 o ausente) es otra cosa, y no tiene que
+ * castigar a nadie.
+ */
+export function esCredencialInvalida(error: { status?: number } | null | undefined): boolean {
+  return error?.status === 400;
+}

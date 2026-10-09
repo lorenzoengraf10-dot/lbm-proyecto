@@ -3,9 +3,11 @@
 import { redirect } from "next/navigation";
 import {
   MAX_INTENTOS_PIN,
+  MENSAJE_SIN_CONEXION,
   MINUTOS_BLOQUEO,
   derivarPassword,
   emailInterno,
+  esCredencialInvalida,
   validarPin,
 } from "@lbm/shared";
 import { claveServiceRole } from "@/lib/env";
@@ -32,12 +34,16 @@ export interface Repartidor {
  */
 export async function listarRepartidores(): Promise<Repartidor[]> {
   const admin = crearClienteServiceRole();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("usuarios")
     .select("id, nombre, pin_fijado_en")
     .eq("rol", "vendedor")
     .eq("activo", true)
     .order("nombre");
+  // supabase-js no tira: devuelve el error. Sin este throw, con la base caída
+  // la lista llegaba vacía y la pantalla decía que no había repartidores
+  // cargados, en vez del aviso de conexión que la página tiene preparado.
+  if (error) throw new Error(error.message);
   return (data ?? []).map(({ id, nombre, pin_fijado_en }) => ({
     id,
     nombre,
@@ -58,11 +64,16 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
 
   const admin = crearClienteServiceRole();
 
-  const { data: usuario } = await admin
+  const { data: usuario, error: errorUsuario } = await admin
     .from("usuarios")
     .select("id, username, rol, activo, pin_fijado_en")
     .eq("id", id)
     .maybeSingle();
+
+  // Que la base no conteste no es "PIN incorrecto". Confundirlos fue lo que
+  // hizo creer que el problema era la contraseña cuando la base estaba en
+  // pausa.
+  if (errorUsuario) return { error: MENSAJE_SIN_CONEXION };
 
   // Mismo mensaje que un PIN equivocado: si dijera "esa cuenta no existe" se
   // podría averiguar qué ids son válidos probando.
@@ -76,11 +87,14 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
     return { error: "Todavía no tenés un PIN. Pedile al dueño que te lo cargue." };
   }
 
-  const { data: intentos } = await admin
+  const { data: intentos, error: errorIntentos } = await admin
     .from("intentos_pin")
     .select("fallidos, bloqueado_hasta")
     .eq("usuario_id", id)
     .maybeSingle();
+  // Sin poder leer los intentos tampoco se pueden contar: seguir de largo
+  // dejaría probar PIN sin límite mientras dure la falla.
+  if (errorIntentos) return { error: MENSAJE_SIN_CONEXION };
 
   if (intentos?.bloqueado_hasta && new Date(intentos.bloqueado_hasta) > new Date()) {
     const minutos = Math.max(
@@ -99,6 +113,13 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
     email: emailInterno(usuario.username),
     password: await derivarPassword(pin, id, claveServiceRole()),
   });
+
+  // Solo un rechazo de la credencial cuenta como intento fallido. Si Auth no
+  // contestó, el PIN puede estar perfecto: decir "PIN incorrecto" y descontar
+  // un intento era castigar al repartidor por una caída del servidor.
+  if (error && !esCredencialInvalida(error)) {
+    return { error: MENSAJE_SIN_CONEXION };
+  }
 
   if (error || !data.user) {
     const fallidos = (intentos?.fallidos ?? 0) + 1;

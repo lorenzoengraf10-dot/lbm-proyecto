@@ -85,3 +85,26 @@ export function textoCobro(
 export function estaImpago(formaPago: FormaPago | null, cobradoEn: string | null): boolean {
   return formaPago === "cuenta_corriente" && !cobradoEn;
 }
+
+/**
+ * Pone en castellano lo que devuelve Postgres cuando corta por una restricción
+ * de la tabla. Lo usan las dos apps: el repartidor lo lee en el celular parado
+ * en la puerta del comercio, y el dueño al corregir un pedido en el panel. Sin
+ * esto leían "numeric field overflow" o 'new row for relation "pedido_items"
+ * violates check constraint "pedido_items_cantidad_check"'.
+ *
+ * Lo que no reconoce lo deja como está: los rechazos de las funciones de la
+ * base ya vienen escritos en castellano.
+ */
+export function explicarErrorDeBase(mensaje: string): string {
+  if (/numeric field overflow/i.test(mensaje)) {
+    return "Alguna cantidad o precio es demasiado grande. Fijate si se coló un cero de más.";
+  }
+  if (/pedido_items_cantidad_check/i.test(mensaje)) {
+    return "Hay una cantidad en cero. La más chica que se puede cargar es 0,01.";
+  }
+  if (/pedido_items_precio_unitario_check|pedidos_total_check/i.test(mensaje)) {
+    return "El pedido quedó con un precio negativo.";
+  }
+  return mensaje;
+}

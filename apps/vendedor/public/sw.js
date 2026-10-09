@@ -112,33 +112,66 @@ self.addEventListener("fetch", (evento) => {
     return;
   }
 
-  // El resto va red primero y caché de respaldo: con señal siempre se ve lo último, y sin
-  // señal se abre igual con lo último que se vio.
-  evento.respondWith(
-    fetch(solicitud)
-      .then((respuesta) => {
-        // Las redirecciones no se guardan: cachear el 307 al login dejaría la
-        // app mandando al login para siempre, incluso ya logueada.
-        if (respuesta.ok && respuesta.type !== "opaqueredirect") {
-          const copia = respuesta.clone();
-          void caches.open(CACHE).then((cache) => cache.put(solicitud, copia));
-        }
-        return respuesta;
-      })
-      .catch(async () => {
-        const enCache = await caches.match(solicitud);
-        if (enCache) return enCache;
-
-        // Navegación a una ruta que nunca se abrió con señal: se sirve la
-        // pantalla principal, que es el escáner — el pedido arranca ahí y la
-        // app abre ahí. El listado queda de segundo respaldo por si el
-        // escáner todavía no está guardado.
-        if (solicitud.mode === "navigate") {
-          const respaldo =
-            (await caches.match("/escanear")) ?? (await caches.match("/comercios"));
-          if (respaldo) return respaldo;
-        }
-        return Response.error();
-      })
-  );
+  // El resto va red primero y caché de respaldo: con señal siempre se ve lo
+  // último, y sin señal se abre igual con lo último que se vio.
+  evento.respondWith(redConPlazo(solicitud));
 });
+
+// Cuánto se espera a la red antes de mostrar lo guardado. Sin plazo, con señal
+// débil —que es distinto de no tener señal— la red tardaba hasta medio minuto
+// en darse por vencida y el repartidor miraba una pantalla en blanco aunque la
+// tuviera guardada en el celular. Si la red contesta después, igual actualiza
+// lo guardado para la próxima vez.
+const ESPERA_RED_MS = 4000;
+
+async function redConPlazo(solicitud) {
+  const deRed = fetch(solicitud).then((respuesta) => {
+    // Las redirecciones no se guardan: cachear el 307 al login dejaría la
+    // app mandando al login para siempre, incluso ya logueada.
+    if (respuesta.ok && respuesta.type !== "opaqueredirect") {
+      const copia = respuesta.clone();
+      void caches.open(CACHE).then((cache) => cache.put(solicitud, copia));
+    }
+    return respuesta;
+  });
+  // Si gana la caché y la red falla después, que ese rechazo no quede suelto.
+  deRed.catch(() => {});
+
+  const primero = await Promise.race([
+    deRed.then(
+      (respuesta) => ({ respuesta }),
+      () => ({ fallo: true })
+    ),
+    new Promise((resolver) => setTimeout(() => resolver({ tarde: true }), ESPERA_RED_MS)),
+  ]);
+
+  if (primero.respuesta) return primero.respuesta;
+
+  if (primero.tarde) {
+    const enCache = await caches.match(solicitud);
+    if (enCache) return enCache;
+    // No hay nada guardado: no queda otra que seguir esperando a la red.
+    try {
+      return await deRed;
+    } catch {
+      return sinRed(solicitud);
+    }
+  }
+
+  return sinRed(solicitud);
+}
+
+async function sinRed(solicitud) {
+  const enCache = await caches.match(solicitud);
+  if (enCache) return enCache;
+
+  // Navegación a una ruta que nunca se abrió con señal: se sirve la pantalla
+  // principal, que es el escáner — el pedido arranca ahí y la app abre ahí. El
+  // listado queda de segundo respaldo por si el escáner todavía no está
+  // guardado.
+  if (solicitud.mode === "navigate") {
+    const respaldo = (await caches.match("/escanear")) ?? (await caches.match("/comercios"));
+    if (respaldo) return respaldo;
+  }
+  return Response.error();
+}

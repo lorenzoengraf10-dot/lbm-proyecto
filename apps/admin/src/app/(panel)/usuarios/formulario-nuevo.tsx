@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { Campo, Mensaje, estilos } from "@/components/ui";
@@ -41,6 +42,17 @@ export function FormularioNuevoUsuario() {
         <BotonEnviar>Crear cuenta</BotonEnviar>
       </form>
 
+      {estado.repartidorNuevo ? (
+        <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm text-amber-900">{estado.ok}</p>
+          <Link
+            href={`/usuarios/${estado.repartidorNuevo.id}`}
+            className={`inline-block ${estilos.boton}`}
+          >
+            Cargarle el PIN a {estado.repartidorNuevo.nombre}
+          </Link>
+        </div>
+      ) : null}
       {estado.credencial ? <AvisoCredencial credencial={estado.credencial} /> : null}
     </div>
   );

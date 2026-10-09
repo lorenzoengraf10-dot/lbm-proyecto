@@ -93,9 +93,23 @@ export async function crearUsuario(
   }
 
   revalidatePath("/usuarios");
+
+  // Al repartidor no se le muestra la contraseña: su app no tiene dónde
+  // escribirla, entra solo con nombre y PIN. Antes se le daba igual, con el
+  // cartel "la usa una vez para configurar la app", que era falso — y el
+  // repartidor no podía entrar hasta que alguien adivinara que faltaba el PIN.
+  if (rol === "vendedor") {
+    return {
+      error: null,
+      ok: `Repartidor ${nombre} creado. Para que pueda entrar a la app, falta cargarle un PIN.`,
+      credencial: null,
+      repartidorNuevo: { id: data.user.id, nombre },
+    };
+  }
+
   return {
     error: null,
-    ok: `Vendedor ${nombre} creado.`,
+    ok: `Administrador ${nombre} creado.`,
     credencial: { usuario: username, clave },
   };
 }
@@ -113,11 +127,18 @@ export async function resetearCredencial(
 
   const { data: usuario } = await admin
     .from("usuarios")
-    .select("username")
+    .select("username, rol")
     .eq("id", id)
     .maybeSingle();
 
   if (!usuario) return fallo("No se encontró ese usuario.");
+
+  // La pantalla ya no lo ofrece para repartidores, pero las actions son
+  // endpoints: el candado va acá. Una contraseña le borra el PIN y su app no
+  // tiene dónde escribirla, así que lo dejaría sin poder entrar.
+  if (usuario.rol === "vendedor") {
+    return fallo("A un repartidor no se le pone contraseña: cargale un PIN nuevo desde su ficha.");
+  }
 
   const clave = generarCredencial();
   const { error } = await admin.auth.admin.updateUserById(id, { password: clave });
@@ -299,7 +320,7 @@ export async function cambiarComision(
 
   revalidatePath("/usuarios");
   revalidatePath(`/usuarios/${id}`);
-  revalidatePath("/comisiones");
+  revalidatePath("/numeros");
 
   return formularioExito(
     `Comisión actualizada a ${redondeado}%. Vale para los pedidos nuevos; los anteriores quedan como estaban.`

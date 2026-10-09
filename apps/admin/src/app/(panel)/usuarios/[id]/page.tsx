@@ -127,31 +127,38 @@ export default async function PaginaUsuario({ params }: { params: Promise<{ id: 
         <FormularioPin id={usuario.id} nombre={usuario.nombre} />
       </div>
 
-      <div className={`${estilos.tarjeta} space-y-3 p-5`}>
-        {esUnoMismo ? (
-          <>
-            <div>
-              <p className="text-sm font-medium text-stone-900">Cambiar mi contraseña</p>
-              <p className="text-sm text-stone-500">
-                La contraseña es el respaldo por si perdés el PIN. Ojo: ponerte un PIN nuevo la
-                reemplaza, así que si querés dejarla lista, cambiala después del PIN.
-              </p>
-            </div>
-            <FormularioCambiarPassword />
-          </>
-        ) : (
-          <>
-            <div>
-              <p className="text-sm font-medium text-stone-900">Contraseña de respaldo</p>
-              <p className="text-sm text-stone-500">
-                Solo hace falta si {usuario.nombre} pierde el PIN. Generar una nueva reemplaza al
-                PIN, así que después habrá que ponerle uno.
-              </p>
-            </div>
-            <FormularioReset id={usuario.id} nombre={usuario.nombre} />
-          </>
-        )}
-      </div>
+      {/* La contraseña y el PIN son la MISMA credencial en Supabase Auth:
+          cambiar una borra la otra. Esta tarjeta decía antes "cambiá la
+          contraseña después del PIN para dejarla de respaldo", que es
+          exactamente lo que mata el PIN — y así quedó afuera el dueño el
+          24/09. Y al repartidor le ofrecía una "contraseña de respaldo" que su
+          app no tiene dónde usar y que encima le borraba el PIN: un toque y
+          quedaba sin poder entrar. A él se lo destraba con un PIN nuevo, en la
+          tarjeta de arriba. */}
+      {esUnoMismo ? (
+        <div className={`${estilos.tarjeta} space-y-3 p-5`}>
+          <div>
+            <p className="text-sm font-medium text-stone-900">Cambiar mi contraseña</p>
+            <p className="text-sm text-stone-500">
+              Tu contraseña y tu PIN no conviven: son la misma credencial. Si cambiás la contraseña,
+              el PIN deja de servir y entrás con «Entrar con contraseña» hasta que te cargues uno
+              nuevo arriba (y cargarte un PIN, a su vez, reemplaza la contraseña).
+            </p>
+          </div>
+          <FormularioCambiarPassword />
+        </div>
+      ) : usuario.rol === "admin" ? (
+        <div className={`${estilos.tarjeta} space-y-3 p-5`}>
+          <div>
+            <p className="text-sm font-medium text-stone-900">Contraseña nueva</p>
+            <p className="text-sm text-stone-500">
+              Para que {usuario.nombre} pueda entrar al panel con «Entrar con contraseña» si no
+              tiene PIN o lo perdió. Reemplaza su PIN: después conviene que se cargue uno.
+            </p>
+          </div>
+          <FormularioReset id={usuario.id} nombre={usuario.nombre} />
+        </div>
+      ) : null}
 
       <div className={`${estilos.tarjeta} flex flex-wrap items-center justify-between gap-3 p-5`}>
         <div>

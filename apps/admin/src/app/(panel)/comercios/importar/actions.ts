@@ -67,9 +67,40 @@ export async function confirmarImportacion(
     return { error: "No hay filas válidas para importar.", importados: 0 };
   }
 
-  const { error } = await supabase.from("comercios").upsert(validas, { onConflict: "codigo" });
-  if (error) {
-    return { error: mensajeDeError(error, "Hay códigos repetidos en el archivo."), importados: 0 };
+  // Lo que el archivo no trae no tiene que borrar lo que ya estaba. El lector
+  // pone null en dirección y zona cuando la columna falta o la celda está en
+  // blanco, y un upsert con ese null pisaba lo cargado a mano: volver a subir
+  // la lista original para sumar comercios nuevos borraba todas las
+  // direcciones y zonas. Se manda cada campo opcional solo si viene con algo.
+  //
+  // Las filas se agrupan por qué campos traen, porque el upsert actualiza
+  // exactamente las columnas que recibe: todas las filas de un mismo envío
+  // tienen que traer las mismas.
+  type Registro = {
+    codigo: string;
+    nombre: string;
+    localidad: string;
+    direccion?: string;
+    zona?: string;
+  };
+  const grupos = new Map<string, Registro[]>();
+  for (const fila of validas) {
+    const registro: Registro = {
+      codigo: fila.codigo,
+      nombre: fila.nombre,
+      localidad: fila.localidad,
+    };
+    if (fila.direccion) registro.direccion = fila.direccion;
+    if (fila.zona) registro.zona = fila.zona;
+    const firma = Object.keys(registro).join(",");
+    grupos.set(firma, [...(grupos.get(firma) ?? []), registro]);
+  }
+
+  for (const filas of grupos.values()) {
+    const { error } = await supabase.from("comercios").upsert(filas, { onConflict: "codigo" });
+    if (error) {
+      return { error: mensajeDeError(error, "Hay códigos repetidos en el archivo."), importados: 0 };
+    }
   }
 
   revalidatePath("/comercios");

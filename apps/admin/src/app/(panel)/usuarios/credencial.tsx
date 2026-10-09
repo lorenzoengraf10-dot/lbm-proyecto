@@ -16,9 +16,12 @@ export function AvisoCredencial({ credencial }: { credencial: CredencialGenerada
           <dd className="font-semibold">{credencial.clave}</dd>
         </div>
       </dl>
+      {/* Solo se genera para administradores: el repartidor entra con nombre y
+          PIN, su app no tiene dónde escribir una contraseña. */}
       <p className="mt-3 text-sm text-amber-800">
-        Se la pasás al vendedor en persona o por WhatsApp. La usa una sola vez, para configurar la
-        app en su celular; después entra con su PIN.
+        Se la pasás en persona o por WhatsApp. Con esto entra al panel tocando «Entrar con
+        contraseña». Después conviene que se cargue un PIN desde su ficha, que reemplaza esta
+        contraseña.
       </p>
     </div>
   );

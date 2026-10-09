@@ -12,7 +12,14 @@ export function BotonAnular({ id }: { id: string }) {
   return (
     <form action={ejecutar} className="space-y-2">
       <input type="hidden" name="id" value={id} />
-      <BotonEnviar variante="secundario">Anular pedido</BotonEnviar>
+      {/* Anular borra el pedido entero y no tiene vuelta atrás: antes era un
+          solo toque, y en el celular se toca sin querer. */}
+      <BotonEnviar
+        variante="secundario"
+        confirmacion="¿Anular este pedido? Se borra entero y no se puede deshacer."
+      >
+        Anular pedido
+      </BotonEnviar>
       {estado.error ? <Mensaje tipo="error">{estado.error}</Mensaje> : null}
     </form>
   );

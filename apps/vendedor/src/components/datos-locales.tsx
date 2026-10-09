@@ -11,8 +11,10 @@ import {
   type ReactNode,
 } from "react";
 import {
+  asegurarDuenio,
   leerComercios,
   leerCola,
+  leerDuenio,
   leerDeudas,
   leerProductos,
   leerUltimosPedidos,
@@ -23,11 +25,19 @@ import {
   type ProductoLocal,
 } from "@/lib/almacen-local";
 import { refrescarCatalogo, sincronizar } from "@/lib/sincronizacion";
+import { crearClienteNavegador } from "@/lib/supabase-browser";
 
 interface DatosLocales {
   comercios: ComercioLocal[];
   productos: ProductoLocal[];
+  /** Lo sin subir de quien tiene la sesión abierta. */
   cola: PendienteCola[];
+  /**
+   * Pedidos sin subir de OTRO repartidor que usó este celular. No se suben
+   * con esta sesión (quedarían a nombre de quien está ahora) ni se borran:
+   * esperan a que él vuelva a entrar con señal.
+   */
+  colaAjena: number;
   /** Lo último que pidió cada comercio, por id, para poder repetirlo. */
   ultimosPedidos: Record<string, ItemUltimoPedido[]>;
   /** Lo que quedó debiendo cada comercio, por id. Sin deuda, no está la clave. */
@@ -120,6 +130,7 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
   const [comercios, setComercios] = useState<ComercioLocal[]>([]);
   const [productos, setProductos] = useState<ProductoLocal[]>([]);
   const [cola, setCola] = useState<PendienteCola[]>([]);
+  const [colaAjena, setColaAjena] = useState(0);
   const [ultimosPedidos, setUltimosPedidos] = useState<Record<string, ItemUltimoPedido[]>>({});
   const [deudas, setDeudas] = useState<Record<string, DeudaLocal>>({});
   const [cargando, setCargando] = useState(true);
@@ -139,17 +150,24 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
   );
 
   const leerDeLocal = useCallback(async () => {
-    const [comerciosLocales, productosLocales, colaLocal, ultimos, deudasLocales] =
+    const [comerciosLocales, productosLocales, colaLocal, ultimos, deudasLocales, duenio, sesion] =
       await Promise.all([
         leerComercios(),
         leerProductos(),
         leerCola(),
         leerUltimosPedidos(),
         leerDeudas(),
+        leerDuenio(),
+        crearClienteNavegador().auth.getSession(),
       ]);
+    // Mismo criterio que sincronizar(): sin dueño anotado, es del dueño del
+    // celular.
+    const usuarioId = sesion.data.session?.user.id ?? null;
+    const propia = colaLocal.filter((p) => (p.vendedorId ?? duenio) === usuarioId);
     setComercios(comerciosLocales);
     setProductos(productosLocales);
-    setCola(colaLocal);
+    setCola(propia);
+    setColaAjena(colaLocal.length - propia.length);
     setUltimosPedidos(ultimos);
     setDeudas(deudasLocales);
   }, []);
@@ -168,6 +186,16 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
   useEffect(() => {
     let vivo = true;
     void (async () => {
+      // Antes que nada, de quién es el celular. Este efecto corre ANTES que el
+      // del layout (React corre primero los de los hijos), así que si esperaba
+      // al layout, la sincronización de abajo arrancaba con el dueño anterior
+      // todavía anotado. asegurarDuenio es de una sola pasada: cuando el
+      // layout lo llame, recibe esta misma.
+      const {
+        data: { session },
+      } = await crearClienteNavegador().auth.getSession();
+      if (session) await asegurarDuenio(session.user.id);
+
       // Primero lo guardado: la app tiene que abrir con datos aunque no haya
       // señal. Después, si hay, se refresca y se vacía la cola.
       await leerDeLocal();
@@ -197,6 +225,7 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
       comercios,
       productos,
       cola,
+      colaAjena,
       ultimosPedidos,
       deudas,
       cargando,
@@ -209,6 +238,7 @@ export function ProveedorDatosLocales({ children }: { children: ReactNode }) {
       comercios,
       productos,
       cola,
+      colaAjena,
       ultimosPedidos,
       deudas,
       cargando,

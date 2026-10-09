@@ -36,6 +36,13 @@ export interface PendienteCola {
    * celular horas antes de subir, y el motivo es parte del pedido.
    */
   sinQrMotivo?: string | null;
+  /**
+   * El repartidor que lo cargó. Solo sube con la sesión de él: si sube con
+   * la de otro, sincronizar_pedido lo anota (y le paga la comisión) a quien
+   * esté logueado en ese momento. Ausente = cargado antes de que existiera
+   * este campo; es del dueño guardado del celular.
+   */
+  vendedorId?: string;
   /** Último error de sincronización, para poder mostrarlo. */
   error?: string;
 }
@@ -78,39 +85,76 @@ async function conStore<T>(
   }
 }
 
+export async function leerDuenio(): Promise<string | null> {
+  return (await conStore<string>(CATALOGO, "readonly", (s) => s.get("duenio"))) ?? null;
+}
+
 /**
- * Deja el celular listo para este repartidor, borrando lo del anterior si
- * había otro.
+ * Deja el celular listo para este repartidor.
  *
- * Sin esto, en un celular compartido quedaba el catálogo, el nombre y —lo
- * grave— la cola de pedidos sin subir del repartidor anterior. Esa cola se
- * habría sincronizado con la sesión del nuevo, y como sincronizar_pedido
- * fuerza vendedor_id = auth.uid(), los pedidos de uno habrían terminado
- * contados (y comisionados) al otro.
+ * Lo que es del anterior y se puede volver a bajar (cartera, nombre, deudas,
+ * últimos pedidos) se borra. Lo que NO se puede volver a bajar —sus pedidos y
+ * cambios de estado sin subir— se queda, marcado con su dueño, y espera a que
+ * él vuelva a entrar con señal: sincronizar() solo sube lo de quien tiene la
+ * sesión abierta.
  *
- * Devuelve true si hubo cambio de dueño, o sea si se borró algo.
+ * Antes la cola del anterior se borraba entera. Eran pedidos tomados y sin
+ * subir: se perdían sin aviso. Y como la sincronización arrancaba antes que
+ * este chequeo (el efecto del proveedor corre antes que el del layout), a
+ * veces ganaba la carrera y los subía con la sesión del nuevo, que se quedaba
+ * con pedidos y comisión ajenos.
+ *
+ * Devuelve true si hubo cambio de dueño.
  */
-export async function asegurarDuenio(usuarioId: string): Promise<boolean> {
-  const anterior = await conStore<string>(CATALOGO, "readonly", (s) => s.get("duenio"));
+let enCurso: { usuarioId: string; promesa: Promise<boolean> } | null = null;
+
+export function asegurarDuenio(usuarioId: string): Promise<boolean> {
+  // El layout y el proveedor de datos lo llaman los dos al abrir. Dos pasadas
+  // en paralelo leerían el mismo dueño anterior y la segunda podría vaciar la
+  // cartera que la primera acababa de bajar.
+  if (enCurso?.usuarioId === usuarioId) return enCurso.promesa;
+  const promesa = asegurarDuenioAhora(usuarioId);
+  enCurso = { usuarioId, promesa };
+  return promesa;
+}
+
+async function asegurarDuenioAhora(usuarioId: string): Promise<boolean> {
+  const anterior = await leerDuenio();
   if (anterior === usuarioId) return false;
 
-  if (anterior) {
-    const base = await abrir();
-    try {
-      const transaccion = base.transaction([CATALOGO, COLA, COLA_ESTADOS], "readwrite");
+  const base = await abrir();
+  try {
+    const transaccion = base.transaction([CATALOGO, COLA, COLA_ESTADOS], "readwrite");
+    if (anterior) {
+      // Lo sin dueño explícito era del anterior: se lo deja escrito antes de
+      // cambiar de dueño, porque después "sin marca" querría decir el nuevo.
+      for (const nombre of [COLA, COLA_ESTADOS]) {
+        const cursor = transaccion.objectStore(nombre).openCursor();
+        cursor.onsuccess = () => {
+          const actual = cursor.result;
+          if (!actual) return;
+          const valor = actual.value as { vendedorId?: string };
+          if (!valor.vendedorId) actual.update({ ...valor, vendedorId: anterior });
+          actual.continue();
+        };
+      }
       transaccion.objectStore(CATALOGO).clear();
-      transaccion.objectStore(COLA).clear();
-      transaccion.objectStore(COLA_ESTADOS).clear();
-      await new Promise<void>((resolver, rechazar) => {
-        transaccion.oncomplete = () => resolver();
-        transaccion.onerror = () => rechazar(transaccion.error);
-      });
-    } finally {
-      base.close();
     }
+    transaccion.objectStore(CATALOGO).put(usuarioId, "duenio");
+    await new Promise<void>((resolver, rechazar) => {
+      transaccion.oncomplete = () => resolver();
+      transaccion.onerror = () => rechazar(transaccion.error);
+    });
+  } finally {
+    base.close();
   }
 
-  await conStore(CATALOGO, "readwrite", (s) => s.put(usuarioId, "duenio"));
+  // Las pantallas que guardó el service worker son las del anterior: sus
+  // pedidos, su resumen. Sin señal se le mostrarían al nuevo. Se borran (los
+  // archivos de la app, que son iguales para todos, quedan).
+  if (anterior && typeof caches !== "undefined") {
+    await caches.delete("lbm-vendedor-v1").catch(() => false);
+  }
   return Boolean(anterior);
 }
 
@@ -226,6 +270,14 @@ export interface CambioEstadoPendiente {
   formaPago: FormaPago | null;
   /** true = marcar cobrado un pedido que había quedado a cuenta. */
   cobrar?: boolean;
+  /**
+   * Con cobrar: antes de cobrar, subir también el estado y la forma de pago
+   * de este mismo registro. Es la entrega "a cuenta" que estaba esperando en
+   * la cola cuando se marcó el cobro (ver registrarCambioEstado).
+   */
+  tambienEstado?: boolean;
+  /** Quién lo marcó. Mismo criterio que PendienteCola.vendedorId. */
+  vendedorId?: string;
   error?: string;
 }
 

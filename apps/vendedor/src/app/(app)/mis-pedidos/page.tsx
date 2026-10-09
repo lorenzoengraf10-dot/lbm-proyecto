@@ -45,7 +45,9 @@ export default async function PaginaMisPedidos() {
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-stone-900">
-                    {comercio ? comercio.nombre : "Comercio eliminado"}
+                    {/* El repartidor solo ve los comercios activos: si no está,
+                        es que lo dieron de baja, no que se haya borrado. */}
+                    {comercio ? comercio.nombre : "Comercio dado de baja"}
                   </p>
                   <p className="text-sm text-stone-500">
                     {ETIQUETA_ESTADO[pedido.estado]}

@@ -30,11 +30,15 @@ export const requerirAdmin = cache(async (): Promise<SesionAdmin> => {
     redirect("/login");
   }
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error } = await supabase
     .from("usuarios")
     .select("nombre, rol, activo")
     .eq("id", user.id)
     .maybeSingle();
+
+  // Si la base no contestó, NO es "esta cuenta no tiene acceso". Se tira para
+  // que lo agarre error.tsx, que ofrece reintentar.
+  if (error) throw new Error(`No se pudo leer el perfil: ${error.message}`);
 
   if (!perfil || perfil.rol !== "admin" || !perfil.activo) {
     redirect("/sin-acceso");

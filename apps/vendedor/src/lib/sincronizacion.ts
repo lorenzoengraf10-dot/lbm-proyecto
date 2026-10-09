@@ -1,6 +1,6 @@
 "use client";
 
-import { numeroDeLaBase, ordenarPorCodigo } from "@lbm/shared";
+import { explicarErrorDeBase, numeroDeLaBase, ordenarPorCodigo } from "@lbm/shared";
 import { crearClienteNavegador } from "./supabase-browser";
 import {
   encolar,
@@ -11,6 +11,7 @@ import {
   guardarUltimosPedidos,
   leerCola,
   leerColaEstados,
+  leerDuenio,
   quitarDeCola,
   quitarEstadoDeCola,
   type CambioEstadoPendiente,
@@ -18,30 +19,49 @@ import {
   type PendienteCola,
 } from "./almacen-local";
 
+// Los mensajes de la base van en castellano: el repartidor los lee en el
+// celular, parado en la puerta del comercio (ver explicarErrorDeBase).
+const enCastellano = explicarErrorDeBase;
+
 /**
- * Pone en castellano lo que devuelve Postgres cuando corta por una restricción
- * de la tabla.
+ * ¿Falló la conexión, o el servidor rechazó el pedido?
  *
- * Estos mensajes no son de adorno: son lo que el repartidor lee en el celular,
- * parado en la puerta del comercio, cuando el pedido no entra. Sin esto leía
- * "numeric field overflow" o 'new row for relation "pedido_items" violates
- * check constraint "pedido_items_cantidad_check"', que no le dice qué hacer.
+ * No es lo mismo y antes se trataban igual. Con señal débil —lo normal en la
+ * calle— la subida fallaba por red, la pantalla decía "No se pudo cargar",
+ * el repartidor volvía a tocar Confirmar y quedaban DOS pedidos en la cola,
+ * que subían los dos al volver la señal.
  *
- * La app ya frena los dos casos antes de mandar (ver formulario-pedido.tsx),
- * así que acá llegan solo por el camino largo: el pedido se guardó sin señal
- * con un precio, y para cuando sube el dueño lo cambió y ahora no entra.
+ * status 0 es una conexión que ni llegó (así lo informa supabase-js); 5xx es
+ * el servidor caído o la base en pausa; 401 es la sesión vencida, que se
+ * renueva sola con señal; 408 y 429 son "probá de nuevo". Nada de eso dice
+ * que el pedido esté mal. Un rechazo de verdad (comercio dado de baja,
+ * producto que ya no existe) llega como 400.
  */
-function enCastellano(mensaje: string): string {
-  if (/numeric field overflow/i.test(mensaje)) {
-    return "La cantidad es demasiado grande para ese producto. Fijate si se coló un cero de más.";
-  }
-  if (/pedido_items_cantidad_check/i.test(mensaje)) {
-    return "Hay una cantidad en cero. La más chica que se puede cargar es 0,01.";
-  }
-  if (/pedido_items_precio_unitario_check|pedidos_total_check/i.test(mensaje)) {
-    return "El pedido quedó con un precio negativo. Avisale al dueño.";
-  }
-  return mensaje;
+function esFallaPasajera(status: number): boolean {
+  return status === 0 || status === 401 || status === 408 || status === 429 || status >= 500;
+}
+
+/**
+ * El usuario de la sesión guardada en el celular. getSession lee lo local,
+ * así que contesta igual sin señal.
+ */
+async function usuarioDeLaSesion(): Promise<string | null> {
+  const {
+    data: { session },
+  } = await crearClienteNavegador().auth.getSession();
+  return session?.user.id ?? null;
+}
+
+/**
+ * ¿Este pendiente es de quien tiene la sesión abierta? Los cargados antes de
+ * que la cola anotara el dueño son del dueño guardado del celular.
+ */
+function esDe(
+  pendiente: { vendedorId?: string },
+  usuarioId: string,
+  duenioGuardado: string | null
+): boolean {
+  return (pendiente.vendedorId ?? duenioGuardado) === usuarioId;
 }
 
 /** Qué pasó con lo que el vendedor acaba de cargar. */
@@ -61,11 +81,18 @@ export type ResultadoCarga =
  * vendedor se iba del comercio creyendo que el pedido estaba.
  */
 export async function registrarPendiente(pendiente: PendienteCola): Promise<ResultadoCarga> {
-  await encolar(pendiente);
+  await encolar({ ...pendiente, vendedorId: (await usuarioDeLaSesion()) ?? undefined });
   const { errores } = await sincronizar();
 
   const propio = errores.get(pendiente.visitaId);
-  if (propio) return { estado: "rechazado", motivo: propio };
+  if (propio) {
+    // Rechazado en el momento, con el repartidor todavía frente al formulario
+    // y las cantidades cargadas: se saca de la cola. Si se quedaba, reintentaba
+    // para siempre sin poder sacarse, y si él lo volvía a cargar cuando se
+    // arreglaba la causa (le reactivaban el comercio), subían los dos.
+    await quitarDeCola(pendiente.visitaId);
+    return { estado: "rechazado", motivo: propio };
+  }
 
   const sigueEnCola = (await leerCola()).some((p) => p.visitaId === pendiente.visitaId);
   return sigueEnCola ? { estado: "en-cola" } : { estado: "subido" };
@@ -79,11 +106,38 @@ export async function registrarPendiente(pendiente: PendienteCola): Promise<Resu
 export async function registrarCambioEstado(
   cambio: CambioEstadoPendiente
 ): Promise<ResultadoCarga> {
-  await encolarEstado(cambio);
+  // La cola guarda un solo cambio por pedido: el último pisa al anterior, y
+  // casi siempre está bien (marcarlo preparado y después entregado manda solo
+  // "entregado"). La excepción es cobrar. Sin señal, "Entregado — a cuenta
+  // corriente" y enseguida "Marcar como cobrado" dejaban solo el cobro: al
+  // subir, el servidor rechazaba cobrar un pedido que para él nunca se había
+  // entregado, y la entrega se perdía. Ahora el cobro se lleva la entrega
+  // pendiente adentro y sube las dos cosas en orden.
+  if (cambio.cobrar) {
+    const previo = (await leerColaEstados()).find(
+      (c) => c.pedidoId === cambio.pedidoId && !c.cobrar
+    );
+    if (previo) {
+      cambio = {
+        pedidoId: cambio.pedidoId,
+        estado: previo.estado,
+        formaPago: previo.formaPago,
+        cobrar: true,
+        tambienEstado: true,
+      };
+    }
+  }
+  await encolarEstado({ ...cambio, vendedorId: (await usuarioDeLaSesion()) ?? undefined });
   const { errores } = await sincronizar();
 
   const propio = errores.get(cambio.pedidoId);
-  if (propio) return { estado: "rechazado", motivo: propio };
+  if (propio) {
+    // Mismo criterio: la pantalla ya dice que no se guardó y no cambia el
+    // estado, así que dejarlo en la cola sería un cambio que el repartidor
+    // cree descartado y que igual seguiría intentando subir.
+    await quitarEstadoDeCola(cambio.pedidoId);
+    return { estado: "rechazado", motivo: propio };
+  }
 
   const sigueEnCola = (await leerColaEstados()).some((c) => c.pedidoId === cambio.pedidoId);
   return sigueEnCola ? { estado: "en-cola" } : { estado: "subido" };
@@ -97,9 +151,18 @@ export interface ResultadoSincronizacion {
 }
 
 export async function sincronizar(): Promise<ResultadoSincronizacion> {
-  const cola = await leerCola();
-  const colaEstados = await leerColaEstados();
   const errores = new Map<string, string>();
+  const usuarioId = await usuarioDeLaSesion();
+  const duenio = await leerDuenio();
+
+  // Solo lo de quien tiene la sesión abierta. Lo de otro repartidor que usó
+  // este celular espera a que él entre: subirlo con esta sesión lo anotaría a
+  // nombre del que está ahora.
+  const propio = <T extends { vendedorId?: string }>(lista: T[]) =>
+    usuarioId ? lista.filter((p) => esDe(p, usuarioId, duenio)) : [];
+  const cola = propio(await leerCola());
+  const colaEstados = propio(await leerColaEstados());
+
   if (cola.length === 0 && colaEstados.length === 0) {
     return { subidos: 0, pendientes: 0, errores };
   }
@@ -109,9 +172,13 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
 
   const supabase = crearClienteNavegador();
   let subidos = 0;
+  // Con la primera falla de conexión se para: insistir con el resto de la
+  // cola contra un servidor que no contesta solo demora, y lo que no subió
+  // queda tal cual para la próxima pasada.
+  let sinConexion = false;
 
   for (const pendiente of cola) {
-    const { error } = await supabase.rpc("sincronizar_pedido", {
+    const { error, status } = await supabase.rpc("sincronizar_pedido", {
       p_visita_id: pendiente.visitaId,
       p_comercio_id: pendiente.comercioId,
       p_fecha_hora: pendiente.fechaHora,
@@ -126,6 +193,11 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
       continue;
     }
 
+    if (esFallaPasajera(status)) {
+      sinConexion = true;
+      break;
+    }
+
     // Un rechazo del servidor (comercio dado de baja, producto que ya no
     // existe, fecha vencida) no se arregla reintentando: se anota el motivo
     // y se deja en la cola para que el vendedor lo vea y avise.
@@ -137,14 +209,26 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
   // un pedido y lo entregó todo sin señal, el pedido tiene que existir en la
   // base antes de que se le pueda cambiar el estado. Si aun así el pedido no
   // llegó a subir, el cambio queda en la cola y entra en la próxima pasada.
-  for (const cambio of colaEstados) {
-    const { error } = cambio.cobrar
-      ? await supabase.rpc("marcar_cobrado", { p_pedido_id: cambio.pedidoId })
-      : await supabase.rpc("cambiar_estado_pedido", {
-          p_pedido_id: cambio.pedidoId,
-          p_estado: cambio.estado,
-          p_forma_pago: cambio.formaPago,
-        });
+  const subirEstado = (cambio: CambioEstadoPendiente) =>
+    supabase.rpc("cambiar_estado_pedido", {
+      p_pedido_id: cambio.pedidoId,
+      p_estado: cambio.estado,
+      p_forma_pago: cambio.formaPago,
+    });
+
+  for (const cambio of sinConexion ? [] : colaEstados) {
+    // Entrega a cuenta + cobro que se marcaron juntos sin señal: primero la
+    // entrega, porque el servidor no cobra un pedido que no quedó a cuenta.
+    // Si la entrega sube y el cobro no, el registro queda entero en la cola y
+    // el reintento vuelve a mandar las dos: entregar de nuevo un pedido ya
+    // entregado da lo mismo.
+    const previo = cambio.cobrar && cambio.tambienEstado ? await subirEstado(cambio) : null;
+    const { error, status } =
+      previo && previo.error
+        ? previo
+        : cambio.cobrar
+          ? await supabase.rpc("marcar_cobrado", { p_pedido_id: cambio.pedidoId })
+          : await subirEstado(cambio);
 
     if (!error) {
       await quitarEstadoDeCola(cambio.pedidoId);
@@ -152,11 +236,13 @@ export async function sincronizar(): Promise<ResultadoSincronizacion> {
       continue;
     }
 
+    if (esFallaPasajera(status)) break;
+
     errores.set(cambio.pedidoId, enCastellano(error.message));
     await encolarEstado({ ...cambio, error: enCastellano(error.message) });
   }
 
-  const pendientes = (await leerCola()).length + (await leerColaEstados()).length;
+  const pendientes = propio(await leerCola()).length + propio(await leerColaEstados()).length;
   return { subidos, pendientes, errores };
 }
 
@@ -248,4 +334,17 @@ export async function refrescarCatalogo(): Promise<void> {
     }
     await guardarDeudas(deudas);
   }
+}
+
+/**
+ * Saca de la cola un pedido que el servidor rechazó en segundo plano (por
+ * ejemplo, porque dieron de baja el comercio mientras estaba guardado sin
+ * señal). Sin esto no había forma de sacarlo: quedaba reintentando y fallando
+ * para siempre, con el aviso de "1 sin subir" fijo arriba.
+ *
+ * Solo para lo rechazado: lo que espera señal no se toca, que se sube solo.
+ */
+export async function descartarRechazado(visitaId: string): Promise<void> {
+  const pendiente = (await leerCola()).find((p) => p.visitaId === visitaId);
+  if (pendiente?.error) await quitarDeCola(visitaId);
 }
