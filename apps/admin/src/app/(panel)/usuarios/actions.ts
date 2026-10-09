@@ -126,7 +126,15 @@ export async function resetearCredencial(
 
   // La contraseña nueva reemplaza al PIN: es la misma credencial. Se borra la
   // marca para que la pantalla lo diga en vez de repetir "PIN incorrecto".
-  await admin.from("usuarios").update({ pin_fijado_en: null }).eq("id", id);
+  const { error: errorMarca } = await admin
+    .from("usuarios")
+    .update({ pin_fijado_en: null })
+    .eq("id", id);
+  if (errorMarca) {
+    return fallo(
+      `La credencial nueva quedó, pero no se pudo anotar en la ficha (${errorMarca.message}). Probá de nuevo.`
+    );
+  }
   revalidatePath("/usuarios");
   revalidatePath(`/usuarios/${id}`);
 
@@ -145,7 +153,7 @@ export async function cambiarMiPassword(
   _estadoPrevio: EstadoFormulario,
   formData: FormData
 ): Promise<EstadoFormulario> {
-  const { supabase } = await requerirAdmin();
+  const { supabase, userId } = await requerirAdmin();
 
   const nueva = String(formData.get("nueva") ?? "");
   const confirmar = String(formData.get("confirmar") ?? "");
@@ -162,7 +170,32 @@ export async function cambiarMiPassword(
     return formularioFallo(`No se pudo cambiar la contraseña: ${error.message}`);
   }
 
-  return formularioExito("Contraseña actualizada.");
+  // El PIN y la contraseña son la MISMA credencial en Supabase Auth: el PIN
+  // se guarda como contraseña derivada (ver fijarPin). Cambiar la contraseña
+  // destruye el PIN, así que hay que borrar la marca, igual que hace
+  // resetearCredencial.
+  //
+  // Esto faltaba, y dejaba afuera al dueño: cambiaba la contraseña, la
+  // pantalla de entrada seguía ofreciéndole el teclado de PIN como si nada, y
+  // el PIN de siempre daba "PIN incorrecto" para siempre. Pasó en producción
+  // el 24/09: contraseña cambiada a la noche, PIN rechazado a la mañana.
+  const admin = crearClienteServiceRole();
+  const [{ error: errorMarca }] = await Promise.all([
+    admin.from("usuarios").update({ pin_fijado_en: null }).eq("id", userId),
+    admin.from("intentos_pin").delete().eq("usuario_id", userId),
+  ]);
+  revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${userId}`);
+
+  if (errorMarca) {
+    return formularioFallo(
+      "La contraseña se cambió, pero no se pudo actualizar el estado del PIN. Para entrar usá la contraseña nueva, no el PIN."
+    );
+  }
+
+  return formularioExito(
+    "Contraseña actualizada. Tu PIN dejó de servir: la próxima vez entrá con esta contraseña y cargate un PIN nuevo desde acá."
+  );
 }
 
 // Elimina la cuenta de verdad (no la baja lógica de cambiarEstadoUsuario):
@@ -314,10 +347,18 @@ export async function fijarPin(
   // Un PIN nuevo borra el bloqueo por intentos fallidos: si se lo cambiaste es
   // justamente porque no podía entrar. Y queda anotado que ya tiene uno, para
   // poder avisarle si intenta entrar sin haberlo recibido.
-  await Promise.all([
+  const [, { error: errorMarca }] = await Promise.all([
     admin.from("intentos_pin").delete().eq("usuario_id", id),
     admin.from("usuarios").update({ pin_fijado_en: new Date().toISOString() }).eq("id", id),
   ]);
+  // La credencial ya cambió arriba: si esto falla, el PIN sirve igual, pero la
+  // pantalla de entrada no lo sabe y le ofrece la contraseña. Mejor decirlo
+  // que mostrar "PIN guardado" como si todo estuviera en orden.
+  if (errorMarca) {
+    return fallo(
+      `El PIN quedó cargado, pero no se pudo anotar en la ficha (${errorMarca.message}). Probá guardarlo de nuevo.`
+    );
+  }
 
   revalidatePath("/usuarios");
   revalidatePath(`/usuarios/${id}`);

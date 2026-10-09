@@ -118,7 +118,7 @@ export default async function PaginaUsuario({ params }: { params: Promise<{ id: 
           <p className="text-sm font-medium text-stone-900">PIN de acceso</p>
           <p className="text-sm text-stone-500">
             {esUnoMismo
-              ? "Con esto entrás al panel: tocás tu nombre y escribís el PIN. Anotalo en algún lado: si lo perdés, nadie te lo puede resetear y vas a tener que entrar con tu contraseña."
+              ? "Con esto entrás al panel: tocás tu nombre y escribís el PIN. Anotalo en algún lado. Ojo: el PIN reemplaza a tu contraseña, no conviven. Si lo perdés, otro administrador te puede cargar uno nuevo desde Usuarios."
               : usuario.rol === "vendedor"
                 ? "Con esto entra a la app: elige su nombre y escribe el PIN. Si se lo olvida o se lo ve alguien, le ponés uno nuevo acá y el anterior deja de servir."
                 : "Con esto entra al panel. Si se lo olvida, le ponés uno nuevo acá."}

@@ -22,8 +22,12 @@ export function FormularioLogin({ admins }: { admins: Admin[] }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [entrando, empezar] = useTransition();
-  // El camino de respaldo: al dueño nadie le puede resetear el PIN, así que
-  // tiene que poder entrar con la contraseña si se lo olvida o queda bloqueado.
+  // El camino por contraseña: para quien todavía no tiene PIN, o para quien
+  // cambió la contraseña después de cargarlo (eso borra el PIN). OJO, no es un
+  // respaldo del PIN: los dos son la misma credencial en Supabase Auth, así
+  // que con un PIN vigente no existe una contraseña aparte. Si un
+  // administrador se olvida el PIN, la salida es que otro administrador le
+  // cargue uno nuevo desde Usuarios.
   const [conPassword, setConPassword] = useState(false);
 
   useEffect(() => {

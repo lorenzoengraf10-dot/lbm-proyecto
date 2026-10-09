@@ -119,7 +119,7 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
       Math.ceil((new Date(intentos.bloqueado_hasta).getTime() - Date.now()) / 60000)
     );
     return {
-      error: `Demasiados intentos. Probá de nuevo en ${minutos} ${minutos === 1 ? "minuto" : "minutos"}, o entrá con tu contraseña.`,
+      error: `Demasiados intentos. Probá de nuevo en ${minutos} ${minutos === 1 ? "minuto" : "minutos"}. Si no te acordás el PIN, otro administrador te puede cargar uno nuevo desde Usuarios.`,
     };
   }
 
@@ -147,13 +147,17 @@ export async function entrarConPin(id: string, pin: string): Promise<EstadoLogin
 
     if (sePaso) {
       return {
-        error: `Demasiados intentos. Probá de nuevo en ${MINUTOS_BLOQUEO_ADMIN} minutos, o entrá con tu contraseña.`,
+        error: `Demasiados intentos. Probá de nuevo en ${MINUTOS_BLOQUEO_ADMIN} minutos. Si no te acordás el PIN, otro administrador te puede cargar uno nuevo desde Usuarios.`,
       };
     }
 
     const quedan = MAX_INTENTOS_PIN - fallidos;
     return {
-      error: `PIN incorrecto. Te ${quedan === 1 ? "queda 1 intento" : `quedan ${quedan} intentos`}.`,
+      // Si alguien cambió la contraseña de esta cuenta (desde "Cambiar mi
+      // contraseña" o desde el tablero de Supabase), el PIN viejo ya no
+      // existe y por más que lo tipee bien va a fallar. Decirlo acá ahorra
+      // quemar los intentos que quedan contra una credencial muerta.
+      error: `PIN incorrecto. Te ${quedan === 1 ? "queda 1 intento" : `quedan ${quedan} intentos`}. Si cambiaste tu contraseña hace poco, el PIN dejó de servir: entrá con la contraseña.`,
     };
   }
 
