@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { COLORES, type PuntoComercio } from "@/lib/mapa";
-import { AVISO_SIN_AZULEJOS, armarCapas } from "@/lib/mapa-capas";
+import { AVISO_SIN_AZULEJOS, armarCapas } from "@lbm/shared/src/mapa-capas";
 
 const formatoPesos = new Intl.NumberFormat("es-AR", {
   style: "currency",

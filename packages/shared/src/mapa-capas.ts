@@ -1,11 +1,12 @@
 import type * as Leaflet from "leaflet";
 
 /**
- * Las capas de fondo de los dos mapas del panel.
+ * Las capas de fondo de los mapas: los dos del panel y el del repartidor.
  *
- * Está acá y no adentro de cada mapa porque son dos —el de la cartera y el de
- * elegir el punto de un comercio— y tienen que verse igual: si uno sale foto y
- * el otro dibujo, marcar la puerta en uno y buscarla en el otro es un lío.
+ * Está acá y no adentro de cada mapa porque tienen que verse igual: si uno
+ * sale foto y el otro dibujo, marcar la puerta en uno y buscarla en el otro es
+ * un lío. No sale por el índice del paquete: solo lo usan pantallas que ya
+ * cargaron Leaflet, y se importa por ruta (@lbm/shared/src/mapa-capas).
  *
  * Recibe el Leaflet ya cargado en vez de importarlo: Leaflet toca window al
  * importarse y en el prerender del servidor eso revienta, así que se carga

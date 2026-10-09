@@ -17,6 +17,8 @@ const PESTAÑAS = [
   { href: "/mis-pedidos", etiqueta: "Mis pedidos" },
   { href: "/planilla", etiqueta: "Planilla" },
   { href: "/resumen", etiqueta: "Resumen" },
+  // Última: sirve para armar el recorrido, pero no es lo de todo el día.
+  { href: "/mapa", etiqueta: "Mapa" },
 ];
 
 export function EncabezadoSuperior({ nombre }: { nombre: string }) {
@@ -82,7 +84,9 @@ export function BarraInferior() {
             key={pestaña.href}
             href={pestaña.href}
             aria-current={activa ? "page" : undefined}
-            className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
+            // Letra un punto más chica en celulares angostos: con seis pestañas,
+            // a 360 px los nombres quedaban pegados uno al otro.
+            className={`min-w-0 flex-1 px-0.5 py-3 text-center text-xs font-medium transition-colors min-[400px]:text-sm ${
               activa ? "text-stone-900" : "text-stone-400"
             }`}
           >

@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { BotonEnviar } from "@/components/boton-enviar";
 import { estilos } from "@/components/ui";
 import { CENTRO_PATAGONES } from "@/lib/mapa";
-import { AVISO_SIN_AZULEJOS, armarCapas } from "@/lib/mapa-capas";
+import { AVISO_SIN_AZULEJOS, armarCapas } from "@lbm/shared/src/mapa-capas";
 import { ESTADO_INICIAL } from "@/lib/formularios";
 import { guardarUbicacionComercio } from "../actions";
 

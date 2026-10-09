@@ -13,13 +13,16 @@ const CATALOGO = "catalogo";
 const COLA = "cola";
 const COLA_ESTADOS = "cola-estados";
 
-// La dirección viaja al celular para que el repartidor sepa llegar sin señal.
-// lat viene solo para saber si a ese comercio ya se le tomó la ubicación:
-// el punto en sí no se usa en la app, se dibuja en el mapa del panel.
+// La dirección viaja al celular para que el repartidor sepa llegar sin señal,
+// y el punto (lat y lng) para dibujarlo en su mapa. lat sola también dice si
+// a ese comercio ya se le tomó la ubicación.
+//
+// lng es opcional porque el catálogo guardado por una versión anterior de la
+// app no la tiene: hasta que se refresque con señal, ese comercio no se dibuja.
 export type ComercioLocal = Pick<
   Tabla<"comercios">,
   "id" | "codigo" | "nombre" | "localidad" | "direccion" | "zona" | "lat"
->;
+> & { lng?: number | null };
 export type ProductoLocal = Pick<Tabla<"productos">, "id" | "nombre" | "precio" | "unidad_medida">;
 
 export interface PendienteCola {

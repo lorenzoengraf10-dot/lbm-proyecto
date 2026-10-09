@@ -259,7 +259,7 @@ export async function refrescarCatalogo(): Promise<void> {
     await Promise.all([
       supabase
         .from("comercios")
-        .select("id, codigo, nombre, localidad, direccion, zona, lat")
+        .select("id, codigo, nombre, localidad, direccion, zona, lat, lng")
         .eq("activo", true)
         .order("codigo"),
       supabase.from("productos").select("id, nombre, precio, unidad_medida").eq("activo", true).order("nombre"),
@@ -288,13 +288,10 @@ export async function refrescarCatalogo(): Promise<void> {
     // PostgREST, para no perder precisión. Se normaliza acá, al guardar, en
     // vez de que cada pantalla se acuerde — el tipo ComercioLocal dice
     // number | null y tiene que ser cierto.
-    //
-    // lng no se baja a propósito: acá solo hace falta saber si el comercio ya
-    // está en el mapa, y la base garantiza que lat y lng están las dos o
-    // ninguna, así que lat sola alcanza. El mapa se dibuja en el panel.
     const normalizados = ordenarPorCodigo(comercios).map((comercio) => ({
       ...comercio,
       lat: numeroDeLaBase(comercio.lat),
+      lng: numeroDeLaBase(comercio.lng),
     }));
     // CP2 antes que CP10: el vendedor busca por código en la lista.
     await guardarCatalogo(normalizados, productos);
